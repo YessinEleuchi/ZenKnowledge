@@ -4,21 +4,20 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { requireCompanyManager } from "@/server/auth/session";
-import {
-  uploadPdf,
-  deleteStoredFile,
-} from "@/server/storage/s3";
-import {
-  createDocumentRecord,
-  isDocumentServiceAllowed,
-} from "@/modules/documents/server/document.dal";
+import { uploadPdf, deleteStoredFile } from "@/server/storage/s3";
 
-type UploadState = {
-  success: boolean;
-  message: string;
-};
+import {
+  assertDocumentCanBeEdited,
+  createDocumentRecord,
+  DocumentInputError,
+  isDocumentServiceAllowed,
+  updateDocumentRecord,
+} from "./document.dal";
+
+import type { DocumentActionState } from "../document.types";
 
 const MAX_PDF_SIZE = 3 * 1024 * 1024;
+const UUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 function textField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -42,150 +41,184 @@ function parseDate(value: string): Date | null {
   return date;
 }
 
-export async function createDocument(
-  _previousState: UploadState,
+async function saveDocument(
+  mode: "create" | "update",
   formData: FormData,
-): Promise<UploadState> {
+): Promise<DocumentActionState> {
+  // Hors du catch : conserver les redirections d’authentification.
   const actor = await requireCompanyManager();
 
-  const titre = textField(formData, "titre");
-  const serviceId = textField(formData, "serviceId") || null;
-  const dateRevision = parseDate(
-    textField(formData, "dateRevision"),
-  );
-  const accessibleCollaborateurs =
-    formData.get("accessibleCollaborateurs") === "on";
-
-  const fichier = formData.get("fichier");
-
-  if (titre.length < 3 || titre.length > 200) {
-    return {
-      success: false,
-      message: "Le titre doit contenir entre 3 et 200 caractères.",
-    };
-  }
-
-  if (!dateRevision) {
-    return {
-      success: false,
-      message: "La date de révision est invalide.",
-    };
-  }
-
-  if (!(fichier instanceof File) || fichier.size === 0) {
-    return {
-      success: false,
-      message: "Sélectionne un fichier PDF non vide.",
-    };
-  }
-
-  if (fichier.size > MAX_PDF_SIZE) {
-    return {
-      success: false,
-      message: "Le fichier ne doit pas dépasser 3 Mo.",
-    };
-  }
-
-  if (!fichier.name.toLowerCase().endsWith(".pdf")) {
-    return {
-      success: false,
-      message: "Seuls les fichiers PDF sont acceptés.",
-    };
-  }
-
-  if (
-    serviceId &&
-    !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(serviceId)
-  ) {
-    return {
-      success: false,
-      message: "Le service sélectionné est invalide.",
-    };
-  }
+  let uploadedKey: string | null = null;
 
   try {
-    if (!(await isDocumentServiceAllowed(serviceId))) {
-  return {
-    success: false,
-    message: "Ce service n’appartient pas à ta société.",
-  };
-}
+    const titre = textField(formData, "titre");
+    const serviceId = textField(formData, "serviceId") || null;
+    const dateRevision = parseDate(
+      textField(formData, "dateRevision"),
+    );
 
-    const body = Buffer.from(await fichier.arrayBuffer());
+    const accessibleCollaborateurs =
+      formData.get("accessibleCollaborateurs") === "on";
 
-    // Contrôle de signature ; l’analyse complète aura lieu à l’ingestion.
-    if (body.subarray(0, 5).toString("ascii") !== "%PDF-") {
-      return {
-        success: false,
-        message: "Le fichier ne possède pas une signature PDF valide.",
-      };
+    const documentId =
+      mode === "create"
+        ? randomUUID()
+        : textField(formData, "documentId");
+
+    const expectedVersionId =
+      textField(formData, "expectedVersionId") || null;
+
+    if (!UUID.test(documentId)) {
+      throw new DocumentInputError("Document invalide.");
     }
 
-    const documentId = randomUUID();
-    const versionId = randomUUID();
+    if (expectedVersionId && !UUID.test(expectedVersionId)) {
+      throw new DocumentInputError("Version invalide.");
+    }
 
-    const cleStockage =
-      `societes/${actor.societeId}` +
-      `/documents/${documentId}/${versionId}.pdf`;
+    if (titre.length < 3 || titre.length > 200) {
+      throw new DocumentInputError(
+        "Le titre doit contenir entre 3 et 200 caractères.",
+      );
+    }
 
-    const nomFichier =
-      fichier.name
-        .split(/[\\/]/)
-        .pop()!
-        .replace(/[\u0000-\u001f\u007f]/g, "")
-        .slice(0, 255) || "document.pdf";
+    if (!dateRevision) {
+      throw new DocumentInputError(
+        "La date de révision est invalide.",
+      );
+    }
 
-    await uploadPdf(cleStockage, body);
+    if (serviceId && !UUID.test(serviceId)) {
+      throw new DocumentInputError("Le service est invalide.");
+    }
 
-    try {
-      // L’écriture imbriquée crée le document et sa version atomiquement.
-     await uploadPdf(cleStockage, body);
+    if (mode === "update") {
+      await assertDocumentCanBeEdited(documentId);
+    }
 
-try {
-  await createDocumentRecord({
-    documentId,
-    versionId,
-    titre,
-    serviceId,
-    dateRevision,
-    accessibleCollaborateurs,
-    cleStockage,
-    nomFichier,
-  });
-} catch (error) {
-  try {
-    await deleteStoredFile(cleStockage);
-  } catch (cleanupError) {
-    console.error(
-      "Fichier orphelin à nettoyer :",
-      cleStockage,
-      cleanupError,
-    );
-  }
+    if (!(await isDocumentServiceAllowed(serviceId))) {
+      throw new DocumentInputError(
+        "Ce service n’appartient pas à ta société.",
+      );
+    }
 
-  throw error;
-}
-    } catch (error) {
-      // Compensation si le stockage réussit mais que Prisma échoue.
-      try {
-        await deleteStoredFile(cleStockage);
-      } catch (cleanupError) {
-        console.error(
-          "Fichier orphelin à nettoyer :",
-          cleStockage,
-          cleanupError,
+    const fichier = formData.get("fichier");
+
+    if (fichier !== null && !(fichier instanceof File)) {
+      throw new DocumentInputError("Le fichier est invalide.");
+    }
+
+    const hasFile =
+      fichier instanceof File &&
+      (fichier.name !== "" || fichier.size > 0);
+
+    if (mode === "create" && !hasFile) {
+      throw new DocumentInputError("Sélectionne un PDF.");
+    }
+
+    let newVersion: {
+      versionId: string;
+      cleStockage: string;
+      nomFichier: string;
+    } | null = null;
+
+    if (fichier instanceof File && hasFile) {
+      if (fichier.size === 0) {
+        throw new DocumentInputError("Le PDF est vide.");
+      }
+
+      if (fichier.size > MAX_PDF_SIZE) {
+        throw new DocumentInputError(
+          "Le PDF ne doit pas dépasser 3 Mo.",
         );
       }
 
-      throw error;
+      if (!fichier.name.toLowerCase().endsWith(".pdf")) {
+        throw new DocumentInputError(
+          "Seuls les fichiers PDF sont acceptés.",
+        );
+      }
+
+      const body = Buffer.from(await fichier.arrayBuffer());
+
+      if (body.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        throw new DocumentInputError(
+          "Le fichier ne possède pas une signature PDF valide.",
+        );
+      }
+
+      const versionId = randomUUID();
+      const cleStockage =
+        `societes/${actor.societeId}` +
+        `/documents/${documentId}/${versionId}.pdf`;
+
+      const nomFichier =
+        fichier.name
+          .split(/[\\/]/)
+          .pop()
+          ?.replace(/[\u0000-\u001f\u007f]/g, "")
+          .slice(0, 255) || "document.pdf";
+
+      await uploadPdf(cleStockage, body);
+      uploadedKey = cleStockage;
+
+      newVersion = {
+        versionId,
+        cleStockage,
+        nomFichier,
+      };
     }
+
+    const fields = {
+      documentId,
+      titre,
+      serviceId,
+      dateRevision,
+      accessibleCollaborateurs,
+    };
+
+    if (mode === "create") {
+      if (!newVersion) {
+        throw new DocumentInputError("Sélectionne un PDF.");
+      }
+
+      await createDocumentRecord({
+        ...fields,
+        ...newVersion,
+      });
+    } else {
+      await updateDocumentRecord({
+        ...fields,
+        expectedVersionId,
+        newVersion,
+      });
+    }
+
+    // À partir d’ici, le fichier est référencé en base.
+    uploadedKey = null;
   } catch (error) {
-    console.error("Échec du dépôt du document :", error);
+    if (uploadedKey) {
+      try {
+        await deleteStoredFile(uploadedKey);
+      } catch (cleanupError) {
+        console.error(
+          "Fichier orphelin à nettoyer :",
+          uploadedKey,
+          cleanupError,
+        );
+      }
+    }
+
+    if (error instanceof DocumentInputError) {
+      return { success: false, message: error.message };
+    }
+
+    console.error("Échec de l’enregistrement :", error);
 
     return {
       success: false,
       message:
-        "Le dépôt a échoué. Vérifie le stockage et la base de données.",
+        "L’enregistrement a échoué. Réessaie dans quelques instants.",
     };
   }
 
@@ -193,6 +226,23 @@ try {
 
   return {
     success: true,
-    message: "Document ajouté. Sa première version est en attente.",
+    message:
+      mode === "create"
+        ? "Document ajouté. Sa première version est en attente."
+        : "Modifications enregistrées.",
   };
+}
+
+export async function createDocument(
+  _previousState: DocumentActionState,
+  formData: FormData,
+): Promise<DocumentActionState> {
+  return saveDocument("create", formData);
+}
+
+export async function updateDocument(
+  _previousState: DocumentActionState,
+  formData: FormData,
+): Promise<DocumentActionState> {
+  return saveDocument("update", formData);
 }

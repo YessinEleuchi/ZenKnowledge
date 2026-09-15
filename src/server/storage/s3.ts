@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -42,6 +43,21 @@ export async function uploadPdf(key: string, body: Buffer) {
       ContentLength: body.length,
     }),
   );
+}
+
+export async function readStoredPdf(key: string) {
+  const result = await getClient().send(
+    new GetObjectCommand({
+      Bucket: requiredEnv("S3_BUCKET"),
+      Key: key,
+    }),
+  );
+
+  if (!result.Body) {
+    throw new Error("Le fichier stocké est vide.");
+  }
+
+  return result.Body.transformToByteArray();
 }
 
 export async function deleteStoredFile(key: string) {

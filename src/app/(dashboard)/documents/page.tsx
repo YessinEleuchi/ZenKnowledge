@@ -1,11 +1,11 @@
-import { DocumentForm } from
-  "@/modules/documents/components/document-form";
-import { DocumentsLibrary } from
-  "@/modules/documents/components/documents-library";
+import { DocumentsLibrary } from "@/modules/documents/components/document-library";
+
 import {
   getDocumentCreationOptions,
   listDocuments,
 } from "@/modules/documents/server/document.dal";
+
+export const runtime = "nodejs";
 
 export default async function DocumentsPage() {
   const [options, documents] = await Promise.all([
@@ -16,7 +16,7 @@ export default async function DocumentsPage() {
   return (
     <DocumentsLibrary
       documents={documents}
-      uploadForm={<DocumentForm services={options.services} />}
+      services={options.services}
     />
   );
 }
