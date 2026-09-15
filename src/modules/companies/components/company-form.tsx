@@ -2,10 +2,18 @@
 
 import { useActionState } from "react";
 
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  createCompanyAction,
-} from "../server/company.actions";
-import { CreateCompanyState } from "../company.types";
+  fieldClassName,
+  labelClassName,
+  errorClassName,
+  SubmitButton,
+  FormFeedback,
+} from "@/components/forms/form-ui";
+
+import { createCompanyAction } from "../server/company.actions";
+import type { CreateCompanyState } from "../company.types";
 
 const initialState: CreateCompanyState = {
   status: "idle",
@@ -18,64 +26,48 @@ export function CompanyForm() {
     initialState,
   );
 
-  const nameErrors = state.fieldErrors?.nom;
+  const nameError = state.fieldErrors?.nom?.[0];
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form
+      action={formAction}
+      aria-busy={pending}
+      className="max-w-xl space-y-5"
+    >
       <div className="space-y-2">
-        <label
-          htmlFor="company-name"
-          className="block text-sm font-medium"
-        >
+        <Label htmlFor="company-name" className={labelClassName}>
           Nom de la société
-        </label>
+        </Label>
 
-        <input
+        <Input
           id="company-name"
           name="nom"
           type="text"
           required
           minLength={2}
           maxLength={150}
+          readOnly={pending}
           placeholder="Ex. ZEN Group"
-          aria-invalid={Boolean(nameErrors?.length)}
+          aria-invalid={Boolean(nameError)}
           aria-describedby={
-            nameErrors?.length ? "company-name-error" : undefined
+            nameError ? "company-name-error" : undefined
           }
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          className={fieldClassName}
         />
 
-        {nameErrors?.length ? (
-          <p
-            id="company-name-error"
-            className="text-sm text-red-600"
-          >
-            {nameErrors[0]}
-          </p>
-        ) : null}
-      </div>
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-gray-900 px-4 py-2 text-white disabled:opacity-50"
-      >
-        {pending ? "Création en cours…" : "Créer la société"}
-      </button>
-
-      <div aria-live="polite" aria-atomic="true">
-        {state.message && (
-          <p
-            className={
-              state.status === "success"
-                ? "text-sm text-green-700"
-                : "text-sm text-red-600"
-            }
-          >
-            {state.message}
+        {nameError && (
+          <p id="company-name-error" className={errorClassName}>
+            {nameError}
           </p>
         )}
       </div>
+
+      <SubmitButton pending={pending} label="Créer la société" />
+
+      <FormFeedback
+        message={state.message}
+        success={state.status === "success"}
+      />
     </form>
   );
 }
