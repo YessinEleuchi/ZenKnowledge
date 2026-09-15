@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
-import { CircleAlert, Eye, EyeOff } from "lucide-react";
+import { useActionState, useRef } from "react";
+import { CircleAlert } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import {
   SubmitButton,
   FormFeedback,
 } from "@/components/forms/form-ui";
+import { Role } from "@/types/enums";
 
 import { createUserAction } from "../server/user.actions";
 import type {
@@ -31,7 +32,6 @@ export function UserForm({
   options: UserCreationOptions;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [showPassword, setShowPassword] = useState(false);
 
   const [state, action, pending] = useActionState(
     async (previous: CreateUserState, formData: FormData) => {
@@ -39,7 +39,6 @@ export function UserForm({
 
       if (result.status === "success") {
         formRef.current?.reset();
-        setShowPassword(false);
       }
 
       return result;
@@ -50,16 +49,11 @@ export function UserForm({
   function errorProps(field: UserField) {
     const invalid = Boolean(state.fieldErrors?.[field]?.length);
 
-    const descriptions = [
-      field === "password" ? "user-password-hint" : undefined,
-      invalid ? `user-${field}-error` : undefined,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
     return {
       "aria-invalid": invalid,
-      "aria-describedby": descriptions || undefined,
+      "aria-describedby": invalid
+        ? `user-${field}-error`
+        : undefined,
     };
   }
 
@@ -74,9 +68,11 @@ export function UserForm({
   }
 
   const unavailableMessage =
-    options.mode === "GESTIONNAIRE" && options.companies.length === 0
+    options.mode === Role.GESTIONNAIRE &&
+    options.companies.length === 0
       ? "Créez d’abord une société depuis la page Sociétés pour pouvoir lui affecter un gestionnaire."
-      : options.mode === "COLLABORATEUR" && options.services.length === 0
+      : options.mode === Role.COLLABORATEUR &&
+          options.services.length === 0
         ? "Aucun service n’est disponible dans votre société. Contactez l’administrateur pour créer un service avant d’ajouter un collaborateur."
         : null;
 
@@ -87,6 +83,7 @@ export function UserForm({
           aria-hidden="true"
           className="mt-0.5 size-5 shrink-0 text-[#806633]"
         />
+
         <p className="text-sm leading-6 text-[#705B32]">
           {unavailableMessage}
         </p>
@@ -101,11 +98,18 @@ export function UserForm({
       aria-busy={pending}
       className="space-y-5"
     >
-      <p className="border-l-2 border-[#B9CDB1] pl-3 text-sm leading-6 text-[#526A5E]">
-        {options.mode === "GESTIONNAIRE"
-          ? "Le compte créé aura le rôle Gestionnaire."
-          : `Le compte sera rattaché à ${options.company.nom}.`}
-      </p>
+      <div className="space-y-1 border-l-2 border-[#B9CDB1] pl-3 text-sm leading-6 text-[#526A5E]">
+        <p>
+          {options.mode === Role.GESTIONNAIRE
+            ? "Le compte créé aura le rôle Gestionnaire."
+            : `Le compte sera rattaché à ${options.company.nom}.`}
+        </p>
+
+        <p>
+          L’utilisateur recevra un lien par e-mail pour définir son
+          mot de passe. Ce lien sera valable pendant 24 heures.
+        </p>
+      </div>
 
       <fieldset
         disabled={pending}
@@ -158,59 +162,7 @@ export function UserForm({
           {fieldError("email")}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="user-password" className={labelClassName}>
-            Mot de passe
-          </Label>
-
-          <div className="relative">
-            <Input
-              id="user-password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              required
-              minLength={12}
-              maxLength={72}
-              className={`${fieldClassName} pr-12`}
-              {...errorProps("password")}
-            />
-
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setShowPassword((visible) => !visible)}
-              aria-label={
-                showPassword
-                  ? "Masquer le mot de passe"
-                  : "Afficher le mot de passe"
-              }
-              aria-controls="user-password"
-              className="absolute inset-y-0 right-0 flex w-11
-                items-center justify-center rounded-r-lg text-[#65716A]
-                hover:bg-[#F0F3EF] hover:text-[#285448]
-                focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-inset focus-visible:ring-[#285448]"
-            >
-              {showPassword ? (
-                <EyeOff aria-hidden="true" className="size-4" />
-              ) : (
-                <Eye aria-hidden="true" className="size-4" />
-              )}
-            </button>
-          </div>
-
-          <p
-            id="user-password-hint"
-            className="text-xs leading-5 text-[#65716A]"
-          >
-            Au moins 12 caractères.
-          </p>
-
-          {fieldError("password")}
-        </div>
-
-        {options.mode === "GESTIONNAIRE" ? (
+        {options.mode === Role.GESTIONNAIRE ? (
           <div className="space-y-2">
             <Label htmlFor="user-societeId" className={labelClassName}>
               Société
@@ -271,9 +223,9 @@ export function UserForm({
         <SubmitButton
           pending={pending}
           label={
-            options.mode === "GESTIONNAIRE"
-              ? "Créer le gestionnaire"
-              : "Créer le collaborateur"
+            options.mode === Role.GESTIONNAIRE
+              ? "Inviter le gestionnaire"
+              : "Inviter le collaborateur"
           }
         />
       </div>

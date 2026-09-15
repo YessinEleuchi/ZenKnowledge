@@ -9,15 +9,6 @@ export const userIdentitySchema = z.object({
     .toLowerCase()
     .email("Adresse e-mail invalide.")
     .max(254),
-
-  password: z
-    .string()
-    .min(12, "Minimum 12 caractères.")
-    .max(72)
-    .refine(
-      (value) => new TextEncoder().encode(value).length <= 72,
-      "Le mot de passe ne doit pas dépasser 72 octets.",
-    ),
 });
 
 export const createManagerSchema = userIdentitySchema.extend({
