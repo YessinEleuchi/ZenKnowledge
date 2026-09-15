@@ -4,8 +4,8 @@ import { useActionState } from "react";
 
 import {
   createCompanyAction,
-  type CreateCompanyState,
 } from "../server/company.actions";
+import { CreateCompanyState } from "../company.types";
 
 const initialState: CreateCompanyState = {
   status: "idle",

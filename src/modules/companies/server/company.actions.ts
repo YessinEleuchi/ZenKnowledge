@@ -5,14 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAdmin } from "@/server/auth/session";
 import { createCompanySchema } from "../company.schema";
 import { createCompany } from "./company.dal";
-
-export type CreateCompanyState = {
-  status: "idle" | "error" | "success";
-  message: string;
-  fieldErrors?: {
-    nom?: string[];
-  };
-};
+import type { CreateCompanyState } from "../company.types";
 
 export async function createCompanyAction(
   _previousState: CreateCompanyState,
