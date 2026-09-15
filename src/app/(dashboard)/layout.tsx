@@ -80,12 +80,12 @@ export default async function WorkspaceLayout({
         </header>
 
         <main
-          id="workspace-content"
-          tabIndex={-1}
-          className="mx-auto w-full max-w-7xl flex-1 p-4 outline-none sm:p-6 lg:p-8"
-        >
-          {children}
-        </main>
+  id="workspace-content"
+  tabIndex={-1}
+  className="mx-auto w-full max-w-7xl flex-1 p-4 outline-none sm:p-5 lg:p-6"
+>
+  {children}
+</main>
       </div>
     </SidebarProvider>
   );

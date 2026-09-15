@@ -36,41 +36,16 @@ export default async function DashboardPage() {
     },
   ].filter((item) => item.visible);
 
-  const firstName = user.nom.trim().split(/\s+/)[0];
-
   return (
     <div className="space-y-10">
       <header className="border-b border-[#DDE3DC] pb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#65716A]">
           Vue d’ensemble
         </p>
-
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Bonjour{firstName ? `, ${firstName}` : ""}.
-        </h1>
-
-        <p className="mt-3 max-w-xl text-sm leading-6 text-[#65716A]">
-          {isAdmin
-            ? "Organisez les espaces de travail et les accès à ZEN Knowledge."
-            : canManageUsers
-              ? "Retrouvez les outils de gestion de votre équipe."
-              : "Bienvenue dans votre espace ZEN Knowledge."}
-        </p>
       </header>
 
       {shortcuts.length > 0 && (
         <section aria-labelledby="shortcuts-title">
-          <h2
-            id="shortcuts-title"
-            className="text-lg font-semibold tracking-tight"
-          >
-            Gérer votre espace
-          </h2>
-
-          <p className="mt-1 text-sm text-[#65716A]">
-            Les actions disponibles pour votre rôle.
-          </p>
-
           <div className="mt-5 overflow-hidden rounded-xl border border-[#DDE3DC] bg-white">
             {shortcuts.map((item) => {
               const Icon = item.icon;

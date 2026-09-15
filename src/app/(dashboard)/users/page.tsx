@@ -20,44 +20,40 @@ export default async function UsersPage() {
   const isAdmin = actor.role === Role.ADMIN;
 
   return (
-    <div className="space-y-8">
-      <header className="border-b border-[#DDE3DC] pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#65716A]">
+  <div className="space-y-5">
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#65716A]">
           Administration
         </p>
 
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#202923]">
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#202923]">
           Utilisateurs
         </h1>
+      </div>
 
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#65716A]">
-          {isAdmin
-            ? "Créez les comptes gestionnaires et affectez-les à leur société."
-            : "Créez les comptes collaborateurs et organisez les affectations de votre équipe."}
-        </p>
-      </header>
+      <span className="pb-0.5 text-sm text-[#65716A]">
+        {users.length} compte{users.length > 1 ? "s" : ""}
+      </span>
+    </header>
 
-      <section
-        aria-labelledby="create-user-title"
-        className="grid gap-6 rounded-xl border border-[#DDE3DC] bg-white p-5 sm:p-6 xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-10"
-      >
-        <div>
-          <h2
-            id="create-user-title"
-            className="text-base font-semibold text-[#243E35]"
-          >
-            {isAdmin ? "Nouveau gestionnaire" : "Nouveau collaborateur"}
-          </h2>
+    <section
+      aria-labelledby="create-user-title"
+      className="overflow-hidden rounded-xl border border-[#DDE3DC] bg-white"
+    >
+      <div className="border-b border-[#E8ECE6] px-4 py-4 sm:px-5">
+        <h2
+          id="create-user-title"
+          className="text-sm font-semibold text-[#243E35]"
+        >
+          {isAdmin ? "Nouveau gestionnaire" : "Nouveau collaborateur"}
+        </h2>
+      </div>
 
-          <p className="mt-2 text-sm leading-6 text-[#65716A]">
-            Renseignez les informations du compte et son affectation.
-          </p>
-        </div>
-
-        <div className="min-w-0">
-          <UserForm options={options} />
-        </div>
-      </section>
+      <div className="p-4 sm:p-5">
+        <UserForm options={options} />
+      </div>
+    </section>
 
       <section
         aria-labelledby="users-title"
