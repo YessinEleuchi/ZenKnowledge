@@ -35,6 +35,57 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
 
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+
+    command: server /data --console-address ":9001"
+
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:?Variable manquante}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?Variable manquante}
+
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    restart: "no"
+
+    depends_on:
+      - minio
+
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?Variable manquante}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Variable manquante}
+      S3_BUCKET: ${S3_BUCKET:?Variable manquante}
+
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        attempt=0
+
+        until mc alias set local http://minio:9000 \
+          "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY"; do
+          attempt=$$((attempt + 1))
+
+          if [ "$$attempt" -ge 30 ]; then
+            echo "MinIO indisponible"
+            exit 1
+          fi
+
+          sleep 2
+        done
+
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc anonymous set none "local/$$S3_BUCKET"
+
 volumes:
   postgres_data:
   n8n_data:
+  minio_data:
