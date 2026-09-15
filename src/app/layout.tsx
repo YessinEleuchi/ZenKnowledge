@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,20 +15,29 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZEN Knowledge",
-  description: "ZEN Tunisie",
+  title: {
+    default: "ZEN Knowledge",
+    template: "%s | ZEN Knowledge",
+  },
+  description: "L’espace de connaissances de ZEN.",
   icons: {
     icon: "/favicon.ico",
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="fr" className="h-full">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} min-h-full antialiased`}
+        style={{ fontFamily: "var(--font-geist-sans), sans-serif" }}
+      >
+        {children}
+      </body>
     </html>
   );
 }
