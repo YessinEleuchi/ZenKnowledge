@@ -6,7 +6,6 @@ import { AcceptInvitationForm } from
 import { isInvitationValid } from
   "@/modules/invitations/server/accept-invitation.dal";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
