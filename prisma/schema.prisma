@@ -1,0 +1,314 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ENUMS
+
+enum Role {
+  ADMIN
+  GESTIONNAIRE
+  COLLABORATEUR
+}
+
+enum StatutVersion {
+  EN_ATTENTE
+  EN_TRAITEMENT
+  A_VALIDER
+  PUBLIEE
+  ARCHIVEE
+  ECHEC
+}
+
+enum StatutExecution {
+  EN_ATTENTE
+  EN_COURS
+  SUCCES
+  ECHEC
+}
+
+enum RoleMessage {
+  USER
+  ASSISTANT
+}
+
+enum Evaluation {
+  UTILE
+  INEXACT
+}
+
+enum StatutRevision {
+  OUVERTE
+  EN_COURS
+  TERMINEE
+  ANNULEE
+}
+
+enum StatutRelance {
+  PLANIFIEE
+  ENVOYEE
+  ECHEC
+}
+
+// ORGANISATION
+
+model Societe {
+  id  String @id @default(uuid()) @db.Uuid
+  nom String
+
+  services      Service[]
+  utilisateurs  Utilisateur[]
+  documents     Document[]
+  conversations Conversation[]
+}
+
+model Service {
+  id        String @id @default(uuid()) @db.Uuid
+  societeId String @db.Uuid
+  nom       String
+
+  societe      Societe       @relation(fields: [societeId], references: [id], onDelete: Restrict)
+  utilisateurs Utilisateur[]
+  documents    Document[]
+
+  @@unique([societeId, nom])
+}
+
+model Utilisateur {
+  id        String  @id @default(uuid()) @db.Uuid
+  societeId String? @db.Uuid
+  serviceId String? @db.Uuid
+  nom       String
+  email     String  @unique
+  role      Role    @default(COLLABORATEUR)
+  actif     Boolean @default(true)
+  motDePasseHash String?
+  societe Societe? @relation(fields: [societeId], references: [id], onDelete: Restrict)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  documents      Document[]
+  conversations  Conversation[]
+  feedbacks      Feedback[]
+  tachesRevision TacheRevision[]
+
+  @@index([societeId])
+  @@index([serviceId])
+}
+
+// DOCUMENTS ET INGESTION
+
+model Document {
+  id             String    @id @default(uuid()) @db.Uuid
+  societeId      String    @db.Uuid
+  serviceId      String?   @db.Uuid
+  proprietaireId String    @db.Uuid
+  titre          String
+  rolesAutorises Role[]    @default([])
+  dateRevision   DateTime  @db.Date
+  supprimeLe     DateTime?
+
+  societe      Societe     @relation(fields: [societeId], references: [id], onDelete: Restrict)
+  service      Service?    @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  proprietaire Utilisateur @relation(fields: [proprietaireId], references: [id], onDelete: Restrict)
+
+  versions       VersionDocument[]
+  tachesRevision TacheRevision[]
+
+  @@index([societeId, supprimeLe])
+  @@index([serviceId])
+  @@index([proprietaireId])
+  @@index([dateRevision])
+}
+
+model VersionDocument {
+  id          String        @id @default(uuid()) @db.Uuid
+  documentId  String        @db.Uuid
+  numero      Int
+  cleStockage String
+  nomFichier  String
+  typeMime    String
+  statut      StatutVersion @default(EN_ATTENTE)
+  creeLe      DateTime      @default(now())
+  publieLe    DateTime?
+
+  document   Document             @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  ingestions ExecutionIngestion[]
+  chunks     Chunk[]
+
+  @@unique([documentId, numero])
+  @@index([statut])
+}
+
+model ExecutionIngestion {
+  id        String          @id @default(uuid()) @db.Uuid
+  versionId String          @db.Uuid
+  statut    StatutExecution @default(EN_ATTENTE)
+  etape     String
+  tentative Int             @default(1)
+  erreur    String?         @db.Text
+  debut     DateTime?
+  fin       DateTime?
+
+  version VersionDocument @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@index([versionId])
+  @@index([statut])
+}
+
+model Chunk {
+  id              String                 @id @default(uuid()) @db.Uuid
+  versionId       String                 @db.Uuid
+  position        Int
+  contenu         String                 @db.Text
+  pageDebut       Int?
+  pageFin         Int?
+  reperePassage   String
+  embedding       Unsupported("vector")?
+  modeleEmbedding String
+
+  version           VersionDocument   @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  passagesRecuperes PassageRecupere[]
+
+  @@unique([versionId, position])
+}
+
+// CONVERSATIONS ET RAG
+
+model Conversation {
+  id            String   @id @default(uuid()) @db.Uuid
+  utilisateurId String   @db.Uuid
+  societeId     String   @db.Uuid
+  titre         String
+  creeLe        DateTime @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
+  societe     Societe     @relation(fields: [societeId], references: [id], onDelete: Restrict)
+  messages    Message[]
+
+  @@index([utilisateurId, creeLe])
+  @@index([societeId])
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @db.Uuid
+  role           RoleMessage
+  contenu        String      @db.Text
+  creeLe         DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  executionsQuestion ExecutionRAG[] @relation("QuestionRAG")
+  executionReponse   ExecutionRAG?  @relation("ReponseRAG")
+  citations          Citation[]
+  feedbacks          Feedback[]
+
+  @@index([conversationId, creeLe])
+}
+
+model ExecutionRAG {
+  id                   String          @id @default(uuid()) @db.Uuid
+  questionId           String          @db.Uuid
+  reponseId            String?         @unique @db.Uuid
+  modele               String
+  statut               StatutExecution @default(EN_ATTENTE)
+  latenceMs            Int?
+  tokensEntree         Int?
+  tokensSortie         Int?
+  coutEstime           Decimal?        @db.Decimal(18, 8)
+  sourcesInsuffisantes Boolean         @default(false)
+  creeLe               DateTime        @default(now())
+
+  question Message  @relation("QuestionRAG", fields: [questionId], references: [id], onDelete: Restrict)
+  reponse  Message? @relation("ReponseRAG", fields: [reponseId], references: [id], onDelete: Restrict)
+
+  passages PassageRecupere[]
+
+  @@index([questionId])
+  @@index([statut, creeLe])
+}
+
+model PassageRecupere {
+  id          String @id @default(uuid()) @db.Uuid
+  executionId String @db.Uuid
+  chunkId     String @db.Uuid
+  rang        Int
+  score       Float
+
+  execution ExecutionRAG @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  chunk     Chunk        @relation(fields: [chunkId], references: [id], onDelete: Restrict)
+  citations Citation[]
+
+  @@unique([executionId, rang])
+  @@unique([executionId, chunkId])
+  @@index([chunkId])
+}
+
+model Citation {
+  id                String @id @default(uuid()) @db.Uuid
+  messageId         String @db.Uuid
+  passageRecupereId String @db.Uuid
+  numero            Int
+  extrait           String @db.Text
+
+  message         Message         @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  passageRecupere PassageRecupere @relation(fields: [passageRecupereId], references: [id], onDelete: Restrict)
+
+  @@unique([messageId, numero])
+  @@index([passageRecupereId])
+}
+
+model Feedback {
+  id            String     @id @default(uuid()) @db.Uuid
+  utilisateurId String     @db.Uuid
+  messageId     String     @db.Uuid
+  evaluation    Evaluation
+  commentaire   String?    @db.Text
+  creeLe        DateTime   @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
+  message     Message     @relation(fields: [messageId], references: [id], onDelete: Restrict)
+
+  @@unique([utilisateurId, messageId])
+  @@index([messageId])
+}
+
+// REVISION ET RELANCES
+
+model TacheRevision {
+  id            String         @id @default(uuid()) @db.Uuid
+  documentId    String         @db.Uuid
+  responsableId String         @db.Uuid
+  statut        StatutRevision @default(OUVERTE)
+  creeLe        DateTime       @default(now())
+  echeance      DateTime
+  termineeLe    DateTime?
+  depublieLe    DateTime?
+
+  document    Document    @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  responsable Utilisateur @relation(fields: [responsableId], references: [id], onDelete: Restrict)
+  relances    Relance[]
+
+  @@index([documentId])
+  @@index([responsableId])
+  @@index([statut, echeance])
+}
+
+model Relance {
+  id        String        @id @default(uuid()) @db.Uuid
+  tacheId   String        @db.Uuid
+  canal     String
+  statut    StatutRelance @default(PLANIFIEE)
+  prevueLe  DateTime
+  envoyeeLe DateTime?
+  erreur    String?       @db.Text
+
+  tache TacheRevision @relation(fields: [tacheId], references: [id], onDelete: Restrict)
+
+  @@index([tacheId])
+  @@index([statut, prevueLe])
+}
