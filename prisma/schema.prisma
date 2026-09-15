@@ -79,24 +79,39 @@ model Service {
 }
 
 model Utilisateur {
-  id        String  @id @default(uuid()) @db.Uuid
-  societeId String? @db.Uuid
-  serviceId String? @db.Uuid
-  nom       String
-  email     String  @unique
-  role      Role    @default(COLLABORATEUR)
-  actif     Boolean @default(true)
+  id           String   @id @default(uuid()) @db.Uuid
+  societeId    String?  @db.Uuid
+  serviceId    String?  @db.Uuid
+  nom          String
+  email        String   @unique
+  role         Role     @default(COLLABORATEUR)
+  actif        Boolean  @default(true)
   passwordHash String?
-  societe Societe? @relation(fields: [societeId], references: [id], onDelete: Restrict)
-  service Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  societe      Societe? @relation(fields: [societeId], references: [id], onDelete: Restrict)
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
   documents      Document[]
   conversations  Conversation[]
   feedbacks      Feedback[]
   tachesRevision TacheRevision[]
+  invitations    InvitationUtilisateur[]
 
   @@index([societeId])
   @@index([serviceId])
+}
+
+model InvitationUtilisateur {
+  id            String    @id @default(uuid()) @db.Uuid
+  utilisateurId String    @db.Uuid
+  tokenHash     String    @unique
+  expireLe      DateTime
+  utiliseLe     DateTime?
+  creeLe        DateTime  @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  @@index([utilisateurId])
+  @@index([expireLe])
 }
 
 // DOCUMENTS ET INGESTION
