@@ -58,7 +58,7 @@ enum StatutRelance {
 
 model Societe {
   id  String @id @default(uuid()) @db.Uuid
-  nom String
+  nom String @unique
 
   services      Service[]
   utilisateurs  Utilisateur[]
