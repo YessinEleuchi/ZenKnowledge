@@ -96,3 +96,22 @@ export async function requireUserManager(): Promise<UserManager> {
 
   throw new Error("Accès refusé à la gestion des utilisateurs.");
 }
+
+export async function requireCompanyManager() {
+  const user = await requireUser();
+
+  if (
+    user.role !== Role.GESTIONNAIRE ||
+    user.societeId === null
+  ) {
+    throw new Error(
+      "Accès refusé : gestionnaire rattaché à une société requis.",
+    );
+  }
+
+  return {
+    ...user,
+    role: Role.GESTIONNAIRE,
+    societeId: user.societeId,
+  };
+}

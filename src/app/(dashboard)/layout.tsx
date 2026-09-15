@@ -34,7 +34,14 @@ export default async function WorkspaceLayout({
   }
 
   const canManageCompanies = user.role === Role.ADMIN;
-  const canManageUsers = user.role !== Role.COLLABORATEUR;
+
+const canManageUsers =
+  user.role === Role.ADMIN ||
+  user.role === Role.GESTIONNAIRE;
+
+const canManageDocuments =
+  user.role === Role.GESTIONNAIRE &&
+  Boolean(user.societeId);
 
   return (
     <SidebarProvider style={workspaceTheme}>
@@ -48,17 +55,18 @@ export default async function WorkspaceLayout({
       </a>
 
       <AppSidebar
-        user={{
-          nom: user.nom,
-          email: user.email,
-          roleLabel: ROLE_LABELS[user.role],
-        }}
-        canManageCompanies={canManageCompanies}
-        canManageUsers={canManageUsers}
-      />
+  user={{
+    nom: user.nom,
+    email: user.email,
+    roleLabel: ROLE_LABELS[user.role],
+  }}
+  canManageCompanies={canManageCompanies}
+  canManageUsers={canManageUsers}
+  canManageDocuments={canManageDocuments}
+/>
 
       <div className="flex min-h-svh min-w-0 flex-1 flex-col bg-[#F7F8F5] text-[#202923]">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-[#DDE3DC] bg-[#F7F8F5] px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-[#DDE3DC] bg-[#F7F8F5] px-4 sm:px-5 lg:px-6">
           <SidebarTrigger
             aria-label="Ouvrir ou fermer la navigation"
             title="Ouvrir ou fermer la navigation"

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import {
   Building2,
+  FileText,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
@@ -30,6 +31,7 @@ type AppSidebarProps = {
   };
   canManageUsers: boolean;
   canManageCompanies: boolean;
+  canManageDocuments: boolean;
 };
 
 function LogoutButton() {
@@ -70,30 +72,37 @@ export function AppSidebar({
   user,
   canManageUsers,
   canManageCompanies,
+  canManageDocuments,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
 
   const items = [
-    {
-      title: "Vue d’ensemble",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      visible: true,
-    },
-    {
-      title: "Sociétés",
-      href: "/companies",
-      icon: Building2,
-      visible: canManageCompanies,
-    },
-    {
-      title: "Utilisateurs",
-      href: "/users",
-      icon: Users,
-      visible: canManageUsers,
-    },
-  ].filter((item) => item.visible);
+  {
+    title: "Vue d’ensemble",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    visible: true,
+  },
+  {
+    title: "Documents",
+    href: "/documents",
+    icon: FileText,
+    visible: canManageDocuments,
+  },
+  {
+    title: "Sociétés",
+    href: "/companies",
+    icon: Building2,
+    visible: canManageCompanies,
+  },
+  {
+    title: "Utilisateurs",
+    href: "/users",
+    icon: Users,
+    visible: canManageUsers,
+  },
+].filter((item) => item.visible);
 
   const initials =
     user.nom
