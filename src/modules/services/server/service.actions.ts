@@ -6,14 +6,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAdmin } from "@/server/auth/session";
 import { createServiceSchema } from "../service.schema";
 import { createService } from "./service.dal";
+import type { CreateServiceState } from "../service.types";
 
-export type CreateServiceState = {
-  status: "idle" | "error" | "success";
-  message: string;
-  fieldErrors?: {
-    nom?: string[];
-  };
-};
 
 export async function createServiceAction(
   _previousState: CreateServiceState,

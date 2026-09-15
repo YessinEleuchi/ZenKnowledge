@@ -4,8 +4,8 @@ import { useActionState } from "react";
 
 import {
   createServiceAction,
-  type CreateServiceState,
 } from "../server/service.actions";
+import type { CreateServiceState } from "../service.types";
 
 const initialState: CreateServiceState = {
   status: "idle",
