@@ -86,7 +86,7 @@ model Utilisateur {
   email     String  @unique
   role      Role    @default(COLLABORATEUR)
   actif     Boolean @default(true)
-  motDePasseHash String?
+  passwordHash String?
   societe Societe? @relation(fields: [societeId], references: [id], onDelete: Restrict)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
