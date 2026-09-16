@@ -25,9 +25,6 @@ import type {
 import { FeedbackButtons } from "./feedback-buttons";
 import { SourcePreview } from "./source-preview";
 
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
 
 type Exchange = {
   id: string;
@@ -37,25 +34,14 @@ type Exchange = {
   evaluation:
     | ChatFeedbackEvaluation
     | null;
-
-  commentaire:
-    | string
-    | null;
 };
 
-/* -------------------------------------------------------------------------- */
-/*                               SUGGESTIONS                                  */
-/* -------------------------------------------------------------------------- */
 
 const suggestions = [
   "Combien de jours de congés annuels avons-nous ?",
   "Comment demander un congé ?",
   "Quel est le délai de validation ?",
 ];
-
-/* -------------------------------------------------------------------------- */
-/*                          HISTORIQUE INITIAL                                */
-/* -------------------------------------------------------------------------- */
 
 function createInitialExchanges(
   conversation: StoredConversation | null,
@@ -89,8 +75,7 @@ function createInitialExchanges(
         evaluation:
           message.evaluation,
 
-        commentaire:
-          message.commentaire,
+        
 
         result: {
           success: true,
@@ -119,9 +104,6 @@ function createInitialExchanges(
   return exchanges;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                            TEXTE + CITATIONS                               */
-/* -------------------------------------------------------------------------- */
 
 function AnswerText({
   text,
@@ -175,9 +157,6 @@ function AnswerText({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                SOURCES                                     */
-/* -------------------------------------------------------------------------- */
 
 function Sources({
   citations,
@@ -250,9 +229,6 @@ function Sources({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              DOCUMENT CHAT                                 */
-/* -------------------------------------------------------------------------- */
 
 export function DocumentChat({
   initialConversation,
@@ -301,12 +277,6 @@ export function DocumentChat({
           formData.get("question") ??
             "",
         ).trim();
-
-      /*
-       * Le FormData contient déjà la valeur.
-       * On peut donc vider immédiatement
-       * le champ côté interface.
-       */
       setDraft("");
 
       const result =
@@ -327,23 +297,14 @@ export function DocumentChat({
 
           result,
 
-          /*
-           * Une nouvelle réponse ne possède
-           * encore aucun feedback.
-           */
+          
           evaluation: null,
-
-          commentaire: null,
         },
       ];
     },
 
     initialExchanges,
   );
-
-  /* ------------------------------------------------------------------------ */
-  /*                           TEXTAREA AUTO-GROW                             */
-  /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
     const element =
@@ -365,10 +326,6 @@ export function DocumentChat({
       `${Math.max(nextHeight, 44)}px`;
   }, [draft]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                           SCROLL AUTOMATIQUE                             */
-  /* ------------------------------------------------------------------------ */
-
   useEffect(() => {
     const behavior =
       initialScrollDone.current
@@ -387,10 +344,6 @@ export function DocumentChat({
     pending,
   ]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                                FOCUS                                     */
-  /* ------------------------------------------------------------------------ */
-
   useEffect(() => {
     if (
       !pending &&
@@ -403,10 +356,6 @@ export function DocumentChat({
     exchanges.length,
   ]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                             SUGGESTIONS                                  */
-  /* ------------------------------------------------------------------------ */
-
   function reuseQuestion(
     question: string,
   ) {
@@ -417,16 +366,10 @@ export function DocumentChat({
     });
   }
 
-  /* ------------------------------------------------------------------------ */
-  /*                                   UI                                     */
-  /* ------------------------------------------------------------------------ */
-
   return (
     <section className="flex h-[calc(100dvh-7rem)] min-h-[520px] w-full flex-col overflow-hidden text-[#202923]">
 
-      {/* ------------------------------------------------------------------ */}
-      {/* HEADER                                                             */}
-      {/* ------------------------------------------------------------------ */}
+  
 
       <header className="shrink-0 border-b border-[#DDE3DC] bg-[#F7F8F5] pb-4">
         <div className="mx-auto w-full max-w-4xl">
@@ -454,20 +397,12 @@ export function DocumentChat({
         </div>
       </header>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* MESSAGES                                                           */}
-      {/* ------------------------------------------------------------------ */}
-
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         aria-label="Conversation"
         aria-busy={pending}
       >
         <div className="mx-auto w-full max-w-4xl space-y-9 px-1 py-8 sm:px-4">
-
-          {/* -------------------------------------------------------------- */}
-          {/* EMPTY STATE                                                    */}
-          {/* -------------------------------------------------------------- */}
 
           {exchanges.length === 0 &&
             !pending && (
@@ -513,20 +448,12 @@ export function DocumentChat({
               </div>
             )}
 
-          {/* -------------------------------------------------------------- */}
-          {/* EXCHANGES                                                      */}
-          {/* -------------------------------------------------------------- */}
-
           {exchanges.map(
             (exchange) => (
               <article
                 key={exchange.id}
                 className="space-y-5"
               >
-
-                {/* -------------------------------------------------------- */}
-                {/* USER                                                     */}
-                {/* -------------------------------------------------------- */}
 
                 <div className="flex justify-end">
                   <div className="max-w-[92%] rounded-2xl rounded-br-md bg-[#285448] px-4 py-3 text-white sm:max-w-[78%]">
@@ -538,9 +465,6 @@ export function DocumentChat({
                   </div>
                 </div>
 
-                {/* -------------------------------------------------------- */}
-                {/* ERROR                                                    */}
-                {/* -------------------------------------------------------- */}
 
                 {!exchange.result
                   .success ? (
@@ -572,9 +496,6 @@ export function DocumentChat({
                     </div>
                   </div>
                 ) : (
-                  /* ------------------------------------------------------ */
-                  /* ASSISTANT                                              */
-                  /* ------------------------------------------------------ */
 
                   <div className="max-w-[96%] sm:max-w-[90%]">
                     <div className="mb-3 flex items-center gap-2">
@@ -603,10 +524,6 @@ export function DocumentChat({
 
                     <div className="pl-9">
 
-                      {/* -------------------------------------------------- */}
-                      {/* ANSWER                                             */}
-                      {/* -------------------------------------------------- */}
-
                       <AnswerText
                         text={
                           exchange.result
@@ -618,10 +535,6 @@ export function DocumentChat({
                         }
                       />
 
-                      {/* -------------------------------------------------- */}
-                      {/* SOURCES                                            */}
-                      {/* -------------------------------------------------- */}
-
                       <Sources
                         citations={
                           exchange.result
@@ -632,10 +545,6 @@ export function DocumentChat({
                         }
                       />
 
-                      {/* -------------------------------------------------- */}
-                      {/* FEEDBACK                                           */}
-                      {/* -------------------------------------------------- */}
-
                       <FeedbackButtons
                         messageId={
                           exchange.result
@@ -644,9 +553,6 @@ export function DocumentChat({
                         initialEvaluation={
                           exchange.evaluation
                         }
-                        initialComment={
-                          exchange.commentaire
-                        }
                       />
                     </div>
                   </div>
@@ -654,10 +560,6 @@ export function DocumentChat({
               </article>
             ),
           )}
-
-          {/* -------------------------------------------------------------- */}
-          {/* PENDING                                                        */}
-          {/* -------------------------------------------------------------- */}
 
           {pending && (
             <article className="space-y-5">
@@ -705,10 +607,6 @@ export function DocumentChat({
           />
         </div>
       </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* COMPOSER                                                           */}
-      {/* ------------------------------------------------------------------ */}
 
       <div className="shrink-0 border-t border-[#DDE3DC] bg-[#F7F8F5]/95 pt-4 backdrop-blur-sm">
         <form

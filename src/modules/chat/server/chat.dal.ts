@@ -26,10 +26,6 @@ const UUID =
 
 const PENDING_MODEL = "PENDING";
 
-/* -------------------------------------------------------------------------- */
-/*                                    TYPES                                   */
-/* -------------------------------------------------------------------------- */
-
 export type RetrievedPassage = {
   chunkId: string;
   documentId: string;
@@ -65,9 +61,6 @@ type CompleteRagTurnInput = {
   tokensSortie?: number | null;
 };
 
-/* -------------------------------------------------------------------------- */
-/*                                   HELPERS                                  */
-/* -------------------------------------------------------------------------- */
 
 function validateUuid(
   value: string,
@@ -112,9 +105,7 @@ function validateEmbedding(
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                         RECHERCHE VECTORIELLE RAG                          */
-/* -------------------------------------------------------------------------- */
+
 
 export async function searchAuthorizedPassages({
   embedding,
@@ -182,13 +173,6 @@ export async function searchAuthorizedPassages({
           },
         });
 
-      /*
-       * On sélectionne d'abord la dernière
-       * version du document.
-       *
-       * Ensuite seulement on vérifie qu'elle
-       * est publiée.
-       */
       const versionIds =
         documents.flatMap(
           (document) => {
@@ -288,9 +272,6 @@ export async function searchAuthorizedPassages({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                         DÉBUT D'UN TOUR RAG                                */
-/* -------------------------------------------------------------------------- */
 
 export async function beginRagTurn({
   question,
@@ -319,12 +300,6 @@ export async function beginRagTurn({
 
   return db.$transaction(
     async (tx) => {
-      /*
-       * Une seule conversation par utilisateur.
-       *
-       * utilisateurId doit être @unique
-       * dans le modèle Prisma Conversation.
-       */
       const conversation =
         await tx.conversation.upsert({
           where: {
@@ -350,11 +325,6 @@ export async function beginRagTurn({
           },
         });
 
-      /*
-       * Si l'utilisateur a changé de société,
-       * on ne réutilise jamais silencieusement
-       * une conversation d'une autre société.
-       */
       if (
         conversation.societeId !==
         societeId
@@ -364,9 +334,6 @@ export async function beginRagTurn({
         );
       }
 
-      /*
-       * Sauvegarder la question utilisateur.
-       */
       const questionMessage =
         await tx.message.create({
           data: {
@@ -385,12 +352,6 @@ export async function beginRagTurn({
           },
         });
 
-      /*
-       * Créer l'exécution avant le retrieval.
-       *
-       * Le véritable modèle LLM sera connu
-       * après le retour du workflow n8n.
-       */
       const execution =
         await tx.executionRAG.create({
           data: {
@@ -435,10 +396,6 @@ export async function beginRagTurn({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                        SAUVEGARDE DU RETRIEVAL                             */
-/* -------------------------------------------------------------------------- */
-
 export async function saveRetrievedPassages({
   executionId,
   passages,
@@ -462,10 +419,7 @@ export async function saveRetrievedPassages({
     "Identifiant d’exécution",
   );
 
-  /*
-   * Vérifier que l'exécution appartient bien
-   * à l'utilisateur connecté.
-   */
+  
   const execution =
     await db.executionRAG.findFirst({
       where: {
@@ -520,16 +474,9 @@ export async function saveRetrievedPassages({
         }),
       ),
 
-    /*
-     * Utile en cas de retry.
-     */
     skipDuplicates: true,
   });
 }
-
-/* -------------------------------------------------------------------------- */
-/*                         FINALISATION DU TOUR RAG                            */
-/* -------------------------------------------------------------------------- */
 
 export async function completeRagTurn({
   executionId,
@@ -583,10 +530,7 @@ export async function completeRagTurn({
 
   return db.$transaction(
     async (tx) => {
-      /*
-       * Vérifier ownership de l'exécution
-       * et récupérer les passages retrouvés.
-       */
+     
       const execution =
         await tx.executionRAG.findFirst({
           where: {
@@ -629,20 +573,12 @@ export async function completeRagTurn({
         );
       }
 
-      /*
-       * Une ExecutionRAG ne peut produire
-       * qu'une seule réponse.
-       */
       if (execution.reponseId) {
         throw new Error(
           "Cette exécution possède déjà une réponse.",
         );
       }
 
-      /*
-       * Associer chunkId →
-       * PassageRecupere.id.
-       */
       const passageByChunkId =
         new Map(
           execution.passages.map(
@@ -696,10 +632,6 @@ export async function completeRagTurn({
           },
         );
 
-      /*
-       * Une réponse d'abstention ne doit
-       * jamais contenir de citation.
-       */
       if (
         sourcesInsuffisantes &&
         citationData.length > 0
@@ -709,9 +641,6 @@ export async function completeRagTurn({
         );
       }
 
-      /*
-       * Créer le message ASSISTANT.
-       */
       const assistantMessage =
         await tx.message.create({
           data: {
@@ -732,9 +661,6 @@ export async function completeRagTurn({
           },
         });
 
-      /*
-       * Sauvegarder les citations utilisées.
-       */
       if (
         citationData.length > 0
       ) {
@@ -758,9 +684,6 @@ export async function completeRagTurn({
         });
       }
 
-      /*
-       * Finaliser ExecutionRAG.
-       */
       await tx.executionRAG.update({
         where: {
           id:
@@ -787,10 +710,6 @@ export async function completeRagTurn({
         },
       });
 
-      /*
-       * Mettre à jour la date du dernier
-       * message de la conversation.
-       */
       await tx.conversation.update({
         where: {
           id:
@@ -811,10 +730,6 @@ export async function completeRagTurn({
     },
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*                           ÉCHEC D'UN TOUR RAG                               */
-/* -------------------------------------------------------------------------- */
 
 export async function failRagTurn(
   executionId: string,
@@ -855,10 +770,6 @@ export async function failRagTurn(
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/*                     CHARGEMENT DE LA CONVERSATION                          */
-/* -------------------------------------------------------------------------- */
-
 export async function getUserConversation(): Promise<
   StoredConversation | null
 > {
@@ -871,10 +782,6 @@ export async function getUserConversation(): Promise<
     return null;
   }
 
-  /*
-   * utilisateurId est @unique,
-   * donc findUnique est suffisant.
-   */
   const conversation =
     await db.conversation.findUnique({
       where: {
@@ -907,11 +814,6 @@ export async function getUserConversation(): Promise<
             contenu: true,
             creeLe: true,
 
-            /*
-             * Pour les messages ASSISTANT,
-             * permet de restaurer le badge
-             * "Informations insuffisantes".
-             */
             executionReponse: {
               select: {
                 sourcesInsuffisantes:
@@ -919,10 +821,6 @@ export async function getUserConversation(): Promise<
               },
             },
 
-            /*
-             * Le feedback sera utilisé à
-             * l'étape suivante.
-             */
             feedbacks: {
               where: {
                 utilisateurId:
@@ -990,11 +888,6 @@ export async function getUserConversation(): Promise<
     return null;
   }
 
-  /*
-   * Un utilisateur ayant changé de société
-   * ne doit pas récupérer une conversation
-   * de son ancienne société.
-   */
   if (
     conversation.societeId !==
     societeId
@@ -1134,12 +1027,6 @@ export async function setMessageFeedback({
     "Identifiant du message",
   );
 
-  /*
-   * Sécurité :
-   * - message ASSISTANT uniquement
-   * - conversation de l'utilisateur connecté
-   * - société courante
-   */
   const message =
     await db.message.findFirst({
       where: {
@@ -1166,9 +1053,6 @@ export async function setMessageFeedback({
     );
   }
 
-  /*
-   * null = retirer le feedback.
-   */
   if (evaluation === null) {
     await db.feedback.deleteMany({
       where: {
@@ -1230,4 +1114,3 @@ export async function setMessageFeedback({
       feedback.evaluation,
   };
 }
-

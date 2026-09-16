@@ -57,10 +57,6 @@ export function FeedbackButtons({
       return;
     }
 
-    /*
-     * Cliquer deux fois sur le même
-     * bouton retire le feedback.
-     */
     const nextEvaluation =
       evaluation === next
         ? null
@@ -69,9 +65,6 @@ export function FeedbackButtons({
     const previousEvaluation =
       evaluation;
 
-    /*
-     * Optimistic UI.
-     */
     setEvaluation(
       nextEvaluation,
     );

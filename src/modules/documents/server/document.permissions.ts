@@ -24,22 +24,6 @@ type DocumentReadScope = {
   where: Prisma.DocumentWhereInput;
   latestVersionOnly: boolean;
 };
-
-/**
- * null signifie qu’aucun accès documentaire n’est autorisé.
- *
- * Gestionnaire :
- * - documents non supprimés de sa société ;
- * - toutes les versions.
- *
- * Collaborateur :
- * - documents de sa société et de son service ;
- * - accès COLLABORATEUR explicitement autorisé ;
- * - date de révision non atteinte ;
- * - uniquement la dernière version, si elle est publiée.
- *
- * Le statut de la dernière version est contrôlé après sa sélection.
- */
 export function getDocumentReadScope(
   user: CurrentUser,
 ): DocumentReadScope | null {
