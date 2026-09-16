@@ -32,6 +32,7 @@ type AppSidebarProps = {
   canManageUsers: boolean;
   canManageCompanies: boolean;
   canManageDocuments: boolean;
+  canConsultDocuments: boolean;
 };
 
 function LogoutButton() {
@@ -73,6 +74,7 @@ export function AppSidebar({
   canManageUsers,
   canManageCompanies,
   canManageDocuments,
+  canConsultDocuments,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -88,7 +90,7 @@ export function AppSidebar({
     title: "Documents",
     href: "/documents",
     icon: FileText,
-    visible: canManageDocuments,
+    visible: canConsultDocuments,
   },
   {
     title: "Sociétés",

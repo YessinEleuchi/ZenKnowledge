@@ -33,15 +33,18 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
 
-  const canManageCompanies = user.role === Role.ADMIN;
+const canManageCompanies = user.role === Role.ADMIN;
 
 const canManageUsers =
   user.role === Role.ADMIN ||
   user.role === Role.GESTIONNAIRE;
 
-const canManageDocuments =
-  user.role === Role.GESTIONNAIRE &&
-  Boolean(user.societeId);
+const canConsultDocuments =
+  Boolean(user.societeId) &&
+  (
+    user.role === Role.GESTIONNAIRE ||
+    user.role === Role.COLLABORATEUR
+  );
 
   return (
     <SidebarProvider style={workspaceTheme}>
@@ -62,7 +65,7 @@ const canManageDocuments =
   }}
   canManageCompanies={canManageCompanies}
   canManageUsers={canManageUsers}
-  canManageDocuments={canManageDocuments}
+  canConsultDocuments={canConsultDocuments}
 />
 
       <div className="flex min-h-svh min-w-0 flex-1 flex-col bg-[#F7F8F5] text-[#202923]">
