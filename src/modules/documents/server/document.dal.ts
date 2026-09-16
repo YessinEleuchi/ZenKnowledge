@@ -2,8 +2,9 @@ import "server-only";
 
 import { db } from "@/server/db";
 import { requireCompanyManager } from "@/server/auth/session";
-import { Role, StatutVersion } from "@/generated/prisma/enums";
-
+import { Role, StatutVersion ,   StatutExecution,
+ } from "@/types/enums";
+import { randomUUID } from "node:crypto";
 import type { DocumentItem } from "../document.types";
 
 type DocumentFields = {
@@ -163,52 +164,63 @@ export async function createDocumentRecord(
 ) {
   const actor = await requireCompanyManager();
 
-  validateStorageKey(actor.societeId, input.documentId, input);
+  const expectedKey =
+    `societes/${actor.societeId}` +
+    `/documents/${input.documentId}/${input.versionId}.pdf`;
 
-  return db.$transaction(async (tx) => {
-    if (input.serviceId) {
-      const service = await tx.service.findFirst({
-        where: {
-          id: input.serviceId,
-          societeId: actor.societeId,
-        },
-        select: { id: true },
-      });
+  if (input.cleStockage !== expectedKey) {
+    throw new Error("Clé de stockage incohérente.");
+  }
 
-      if (!service) {
-        throw new DocumentInputError(
-          "Ce service n’appartient pas à ta société.",
-        );
-      }
-    }
+  if (!(await isDocumentServiceAllowed(input.serviceId))) {
+    throw new Error("Ce service n’appartient pas à ta société.");
+  }
 
-    return tx.document.create({
-      data: {
-        id: input.documentId,
-        titre: input.titre,
-        societeId: actor.societeId,
-        proprietaireId: actor.id,
-        serviceId: input.serviceId,
-        dateRevision: input.dateRevision,
-        rolesAutorises: input.accessibleCollaborateurs
-          ? [Role.COLLABORATEUR]
-          : [],
-        versions: {
-          create: {
-            id: input.versionId,
-            numero: 1,
-            cleStockage: input.cleStockage,
-            nomFichier: input.nomFichier,
-            typeMime: "application/pdf",
-            statut: StatutVersion.EN_ATTENTE,
+  const executionId = randomUUID();
+
+  await db.document.create({
+    data: {
+      id: input.documentId,
+      titre: input.titre,
+      societeId: actor.societeId,
+      proprietaireId: actor.id,
+      serviceId: input.serviceId,
+      dateRevision: input.dateRevision,
+      rolesAutorises: input.accessibleCollaborateurs
+        ? [Role.COLLABORATEUR]
+        : [],
+
+      versions: {
+        create: {
+          id: input.versionId,
+          numero: 1,
+          cleStockage: input.cleStockage,
+          nomFichier: input.nomFichier,
+          typeMime: "application/pdf",
+          statut: StatutVersion.EN_ATTENTE,
+
+          ingestions: {
+            create: {
+              id: executionId,
+              statut: StatutExecution.EN_ATTENTE,
+              etape: "DECLENCHEMENT",
+              tentative: 1,
+            },
           },
         },
       },
-      select: { id: true },
-    });
+    },
+    select: {
+      id: true,
+    },
   });
-}
 
+  return {
+    documentId: input.documentId,
+    versionId: input.versionId,
+    executionId,
+  };
+}
 export async function updateDocumentRecord(
   input: UpdateDocumentRecordInput,
 ) {
@@ -321,4 +333,106 @@ export async function updateDocumentRecord(
   }
 
   throw new Error("Impossible de terminer la transaction.");
+}
+
+export async function recordIngestionDispatchIssue(
+  executionId: string,
+) {
+  const actor = await requireCompanyManager();
+
+  await db.executionIngestion.updateMany({
+    where: {
+      id: executionId,
+      statut: StatutExecution.EN_ATTENTE,
+      etape: "DECLENCHEMENT",
+      version: {
+        document: {
+          societeId: actor.societeId,
+          supprimeLe: null,
+        },
+      },
+    },
+    data: {
+      erreur:
+        "Réception par n8n non confirmée. Vérifier avant de relancer.",
+    },
+  });
+}
+export async function prepareDocumentIngestion(versionId: string) {
+  const actor = await requireCompanyManager();
+
+  return db.$transaction(async (tx) => {
+    // Cette écriture verrouille la version pendant la transaction.
+    // Deux appels concurrents seront traités successivement.
+    const version = await tx.versionDocument.updateMany({
+      where: {
+        id: versionId,
+        statut: StatutVersion.EN_ATTENTE,
+        document: {
+          societeId: actor.societeId,
+          supprimeLe: null,
+        },
+      },
+      data: {
+        statut: StatutVersion.EN_ATTENTE,
+      },
+    });
+
+    if (version.count !== 1) {
+      throw new DocumentInputError(
+        "Cette version ne peut pas être mise en ingestion.",
+      );
+    }
+
+    const existing = await tx.executionIngestion.findFirst({
+      where: {
+        versionId,
+        statut: {
+          in: [
+            StatutExecution.EN_ATTENTE,
+            StatutExecution.EN_COURS,
+            StatutExecution.SUCCES,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        statut: true,
+      },
+    });
+
+    if (existing) {
+      if (existing.statut !== StatutExecution.EN_ATTENTE) {
+        throw new DocumentInputError(
+          "Cette ingestion est déjà en cours ou terminée.",
+        );
+      }
+
+      return {
+        executionId: existing.id,
+        versionId,
+      };
+    }
+
+    const lastExecution = await tx.executionIngestion.findFirst({
+      where: { versionId },
+      orderBy: { tentative: "desc" },
+      select: { tentative: true },
+    });
+
+    const execution = await tx.executionIngestion.create({
+      data: {
+        versionId,
+        statut: StatutExecution.EN_ATTENTE,
+        etape: "DECLENCHEMENT",
+        tentative: (lastExecution?.tentative ?? 0) + 1,
+      },
+      select: { id: true },
+    });
+
+    return {
+      executionId: execution.id,
+      versionId,
+    };
+  });
 }

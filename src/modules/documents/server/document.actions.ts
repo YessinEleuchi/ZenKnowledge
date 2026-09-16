@@ -4,20 +4,29 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { requireCompanyManager } from "@/server/auth/session";
-import { uploadPdf, deleteStoredFile } from "@/server/storage/s3";
+import {
+  uploadPdf,
+  deleteStoredFile,
+} from "@/server/storage/s3";
+import { triggerDocumentIngestion } from
+  "@/server/workflows/ingestion";
 
 import {
   assertDocumentCanBeEdited,
   createDocumentRecord,
   DocumentInputError,
   isDocumentServiceAllowed,
+  prepareDocumentIngestion,
+  recordIngestionDispatchIssue,
   updateDocumentRecord,
 } from "./document.dal";
 
 import type { DocumentActionState } from "../document.types";
 
 const MAX_PDF_SIZE = 3 * 1024 * 1024;
-const UUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+const UUID =
+  /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 function textField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -45,10 +54,11 @@ async function saveDocument(
   mode: "create" | "update",
   formData: FormData,
 ): Promise<DocumentActionState> {
-  // Hors du catch : conserver les redirections d’authentification.
+  // Hors du catch pour préserver la redirection d’authentification.
   const actor = await requireCompanyManager();
 
   let uploadedKey: string | null = null;
+  let versionToIngest: string | null = null;
 
   try {
     const titre = textField(formData, "titre");
@@ -56,7 +66,6 @@ async function saveDocument(
     const dateRevision = parseDate(
       textField(formData, "dateRevision"),
     );
-
     const accessibleCollaborateurs =
       formData.get("accessibleCollaborateurs") === "on";
 
@@ -148,6 +157,7 @@ async function saveDocument(
       }
 
       const versionId = randomUUID();
+
       const cleStockage =
         `societes/${actor.societeId}` +
         `/documents/${documentId}/${versionId}.pdf`;
@@ -194,8 +204,11 @@ async function saveDocument(
       });
     }
 
-    // À partir d’ici, le fichier est référencé en base.
+    // L’écriture en base a réussi : ne plus supprimer ce fichier.
     uploadedKey = null;
+
+    // Aucun nouveau PDF = aucune nouvelle ingestion.
+    versionToIngest = newVersion?.versionId ?? null;
   } catch (error) {
     if (uploadedKey) {
       try {
@@ -210,7 +223,10 @@ async function saveDocument(
     }
 
     if (error instanceof DocumentInputError) {
-      return { success: false, message: error.message };
+      return {
+        success: false,
+        message: error.message,
+      };
     }
 
     console.error("Échec de l’enregistrement :", error);
@@ -222,14 +238,67 @@ async function saveDocument(
     };
   }
 
+  // Le document est enregistré.
+  // Les erreurs suivantes concernent uniquement l’ingestion.
+  let ingestionDispatchConfirmed = false;
+
+  if (versionToIngest) {
+    let executionId: string | null = null;
+
+    try {
+      const ingestion = await prepareDocumentIngestion(
+        versionToIngest,
+      );
+
+      executionId = ingestion.executionId;
+
+      await triggerDocumentIngestion(ingestion);
+
+      ingestionDispatchConfirmed = true;
+    } catch (error) {
+      console.error(
+        "Préparation ou déclenchement de l’ingestion non confirmé :",
+        versionToIngest,
+        error,
+      );
+
+      if (executionId) {
+        try {
+          await recordIngestionDispatchIssue(executionId);
+        } catch (trackingError) {
+          console.error(
+            "Impossible d’enregistrer le problème de déclenchement :",
+            executionId,
+            trackingError,
+          );
+        }
+      }
+    }
+  }
+
   revalidatePath("/documents");
+
+  if (versionToIngest && !ingestionDispatchConfirmed) {
+    return {
+      success: true,
+      message:
+        "Document enregistré. Le lancement du traitement n’a pas pu être confirmé.",
+    };
+  }
+
+  if (versionToIngest) {
+    return {
+      success: true,
+      message:
+        mode === "create"
+          ? "Document ajouté. Demande d’ingestion transmise."
+          : "Nouvelle version enregistrée. Demande d’ingestion transmise.",
+    };
+  }
 
   return {
     success: true,
-    message:
-      mode === "create"
-        ? "Document ajouté. Sa première version est en attente."
-        : "Modifications enregistrées.",
+    message: "Modifications enregistrées.",
   };
 }
 
