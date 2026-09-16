@@ -193,9 +193,9 @@ model Chunk {
 
 model Conversation {
   id               String   @id @default(uuid()) @db.Uuid
-  utilisateurId    String   @db.Uuid
+  utilisateurId    String   @unique @db.Uuid
   societeId        String   @db.Uuid
-  titre            String
+  titre            String   @default("Assistant documentaire")
   creeLe           DateTime @default(now())
   modifieLe        DateTime @updatedAt
   dernierMessageLe DateTime @default(now())
@@ -205,7 +205,6 @@ model Conversation {
 
   messages Message[]
 
-  @@index([utilisateurId, dernierMessageLe])
   @@index([societeId])
 }
 
