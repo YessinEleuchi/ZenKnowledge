@@ -2,28 +2,48 @@ import "server-only";
 
 import { z } from "zod";
 
-const chunkSchema = z.object({
-  position: z.number().int().min(1),
+const chunkSchema = z
+  .object({
+    position: z.number().int().min(1).max(200),
 
-  contenu: z.string().trim().min(1).max(1500),
+    contenu: z.string().trim().min(1).max(1500),
 
-  embedding: z
-    .array(
-      z.number().finite().min(-1_000_000).max(1_000_000),
-    )
-    .length(768)
-    .refine(
-      (values) => values.some((value) => Math.abs(value) > 1e-12),
-      "Le vecteur ne doit pas être nul.",
-    ),
-}).strict();
+    pageDebut: z.number().int().min(1).max(2_147_483_647),
+
+    pageFin: z.number().int().min(1).max(2_147_483_647),
+
+    reperePassage: z.string().trim().min(1).max(200),
+
+    embedding: z
+      .array(
+        z.number().finite().min(-1_000_000).max(1_000_000),
+      )
+      .length(768)
+      .refine(
+        (values) => Math.hypot(...values) >= 1e-12,
+        "Le vecteur ne doit pas être nul.",
+      ),
+  })
+  .strict()
+  .superRefine((chunk, ctx) => {
+    if (chunk.pageFin !== chunk.pageDebut) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pageFin"],
+        message: "Chaque chunk doit appartenir à une seule page.",
+      });
+    }
+  });
 
 export const completeIngestionSchema = z
   .object({
     executionId: z.string().uuid(),
     versionId: z.string().uuid(),
+
     modeleEmbedding: z.literal("gemini-embedding-2"),
+
     totalChunks: z.number().int().min(1).max(200),
+
     chunks: z.array(chunkSchema).min(1).max(200),
   })
   .strict()
@@ -36,15 +56,38 @@ export const completeIngestionSchema = z
       });
     }
 
-    const positions = data.chunks
-      .map((chunk) => chunk.position)
-      .sort((a, b) => a - b);
+    const ordered = [...data.chunks].sort(
+      (a, b) => a.position - b.position,
+    );
 
-    if (positions.some((position, index) => position !== index + 1)) {
+    if (
+      ordered.some(
+        (chunk, index) => chunk.position !== index + 1,
+      )
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["chunks"],
-        message: "Les positions doivent être uniques et continues depuis 1.",
+        message:
+          "Les positions doivent être uniques et continues depuis 1.",
+      });
+    }
+
+    if (
+      ordered.some(
+        (chunk, index) =>
+          index > 0 &&
+          chunk.pageDebut < ordered[index - 1].pageDebut,
+      )
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["chunks"],
+        message: "Les pages doivent suivre l’ordre des passages.",
       });
     }
   });
+
+export type CompleteIngestionInput = z.infer<
+  typeof completeIngestionSchema
+>;
