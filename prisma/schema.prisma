@@ -191,20 +191,21 @@ model Chunk {
   @@unique([versionId, position])
 }
 
-// CONVERSATIONS ET RAG
-
 model Conversation {
-  id            String   @id @default(uuid()) @db.Uuid
-  utilisateurId String   @db.Uuid
-  societeId     String   @db.Uuid
-  titre         String
-  creeLe        DateTime @default(now())
+  id               String   @id @default(uuid()) @db.Uuid
+  utilisateurId    String   @db.Uuid
+  societeId        String   @db.Uuid
+  titre            String
+  creeLe           DateTime @default(now())
+  modifieLe        DateTime @updatedAt
+  dernierMessageLe DateTime @default(now())
 
   utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
   societe     Societe     @relation(fields: [societeId], references: [id], onDelete: Restrict)
-  messages    Message[]
 
-  @@index([utilisateurId, creeLe])
+  messages Message[]
+
+  @@index([utilisateurId, dernierMessageLe])
   @@index([societeId])
 }
 
@@ -284,6 +285,7 @@ model Feedback {
   evaluation    Evaluation
   commentaire   String?    @db.Text
   creeLe        DateTime   @default(now())
+  modifieLe     DateTime   @updatedAt
 
   utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Restrict)
   message     Message     @relation(fields: [messageId], references: [id], onDelete: Restrict)
