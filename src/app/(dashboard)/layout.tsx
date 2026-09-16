@@ -47,6 +47,9 @@ const canConsultDocuments =
     user.role === Role.COLLABORATEUR
   );
 
+  const canViewObservability =
+  user.role === Role.ADMIN;
+
 const canUseChat =
   Boolean(user.societeId) &&
   (
@@ -69,12 +72,24 @@ const canUseChat =
   user={{
     nom: user.nom,
     email: user.email,
-    roleLabel: ROLE_LABELS[user.role],
+    roleLabel:
+      ROLE_LABELS[user.role],
   }}
-  canManageCompanies={canManageCompanies}
-  canManageUsers={canManageUsers}
-  canConsultDocuments={canConsultDocuments}
-  canUseChat={canUseChat}
+  canManageCompanies={
+    canManageCompanies
+  }
+  canManageUsers={
+    canManageUsers
+  }
+  canConsultDocuments={
+    canConsultDocuments
+  }
+  canUseChat={
+    canUseChat
+  }
+  canViewObservability={
+    canViewObservability
+  }
 />
 
       <div className="flex min-h-svh min-w-0 flex-1 flex-col bg-[#F7F8F5] text-[#202923]">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import {
+  Activity,
   Building2,
   FileText,
   LayoutDashboard,
@@ -34,6 +35,7 @@ type AppSidebarProps = {
   canManageCompanies: boolean;
   canConsultDocuments: boolean;
   canUseChat: boolean;
+  canViewObservability : boolean;
 };
 
 function LogoutButton() {
@@ -76,6 +78,7 @@ export function AppSidebar({
   canManageCompanies,
   canConsultDocuments,
   canUseChat,
+  canViewObservability,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -111,6 +114,12 @@ const items = [
     icon: Users,
     visible: canManageUsers,
   },
+  {
+  title: "Observabilité",
+  href: "/observability",
+  icon: Activity,
+  visible: canViewObservability,
+},
 ].filter((item) => item.visible);
 
   const initials =
