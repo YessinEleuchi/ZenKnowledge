@@ -1107,3 +1107,127 @@ export async function getUserConversation(): Promise<
       ),
   };
 }
+
+export async function setMessageFeedback({
+  messageId,
+  evaluation,
+}: {
+  messageId: string;
+  evaluation:
+    | "UTILE"
+    | "INEXACT"
+    | null;
+}) {
+  const actor = await requireUser();
+
+  const societeId =
+    actor.societeId;
+
+  if (!societeId) {
+    throw new Error(
+      "Une société est nécessaire.",
+    );
+  }
+
+  validateUuid(
+    messageId,
+    "Identifiant du message",
+  );
+
+  /*
+   * Sécurité :
+   * - message ASSISTANT uniquement
+   * - conversation de l'utilisateur connecté
+   * - société courante
+   */
+  const message =
+    await db.message.findFirst({
+      where: {
+        id: messageId,
+
+        role: "ASSISTANT",
+
+        conversation: {
+          utilisateurId:
+            actor.id,
+
+          societeId,
+        },
+      },
+
+      select: {
+        id: true,
+      },
+    });
+
+  if (!message) {
+    throw new Error(
+      "Message introuvable.",
+    );
+  }
+
+  /*
+   * null = retirer le feedback.
+   */
+  if (evaluation === null) {
+    await db.feedback.deleteMany({
+      where: {
+        utilisateurId:
+          actor.id,
+
+        messageId:
+          message.id,
+      },
+    });
+
+    return {
+      evaluation: null,
+    };
+  }
+
+  if (
+    evaluation !== "UTILE" &&
+    evaluation !== "INEXACT"
+  ) {
+    throw new Error(
+      "Évaluation invalide.",
+    );
+  }
+
+  const feedback =
+    await db.feedback.upsert({
+      where: {
+        utilisateurId_messageId: {
+          utilisateurId:
+            actor.id,
+
+          messageId:
+            message.id,
+        },
+      },
+
+      update: {
+        evaluation,
+      },
+
+      create: {
+        utilisateurId:
+          actor.id,
+
+        messageId:
+          message.id,
+
+        evaluation,
+      },
+
+      select: {
+        evaluation: true,
+      },
+    });
+
+  return {
+    evaluation:
+      feedback.evaluation,
+  };
+}
+
