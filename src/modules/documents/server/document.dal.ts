@@ -1,7 +1,15 @@
 import "server-only";
 
 import { db } from "@/server/db";
-import { requireCompanyManager } from "@/server/auth/session";
+import {
+  requireCompanyManager,
+  requireUser,
+} from "@/server/auth/session";
+import {
+  getDocumentReadScope,
+  getTodayInTunis,
+  isPublishedVersion,
+} from "./document.permissions";
 import { Role, StatutVersion ,   StatutExecution,
  } from "@/types/enums";
 import { randomUUID } from "node:crypto";
@@ -73,25 +81,66 @@ export async function getDocumentCreationOptions() {
   return { services };
 }
 
+async function markDocumentsDueForReview(societeId: string) {
+  return db.versionDocument.updateMany({
+    where: {
+      statut: StatutVersion.PUBLIEE,
+      document: {
+        societeId,
+        supprimeLe: null,
+        dateRevision: {
+          lte: getTodayInTunis(),
+        },
+      },
+    },
+    data: {
+      statut: StatutVersion.A_VALIDER,
+    },
+  });
+}
+
 export async function listDocuments(): Promise<DocumentItem[]> {
-  const actor = await requireCompanyManager();
+  const actor = await requireUser();
+  const scope = getDocumentReadScope(actor);
+
+  if (!scope) {
+    return [];
+  }
+
+  // On conserve le comportement actuel pour les gestionnaires.
+  // La consultation d’un collaborateur ne modifie pas la base.
+  if (
+    actor.role === Role.GESTIONNAIRE &&
+    actor.societeId !== null
+  ) {
+    await markDocumentsDueForReview(actor.societeId);
+  }
 
   const documents = await db.document.findMany({
-    where: {
-      societeId: actor.societeId,
-      supprimeLe: null,
-    },
+    where: scope.where,
+
     select: {
       id: true,
       titre: true,
       serviceId: true,
       dateRevision: true,
       rolesAutorises: true,
+
       service: {
-        select: { nom: true },
+        select: {
+          nom: true,
+        },
       },
+
       versions: {
-        orderBy: { numero: "desc" },
+        orderBy: {
+          numero: "desc",
+        },
+
+        // Gestionnaire : historique complet.
+        // Collaborateur : dernière version uniquement.
+        ...(scope.latestVersionOnly ? { take: 1 } : {}),
+
         select: {
           id: true,
           numero: true,
@@ -101,19 +150,31 @@ export async function listDocuments(): Promise<DocumentItem[]> {
         },
       },
     },
-    orderBy: { titre: "asc" },
+
+    orderBy: {
+      titre: "asc",
+    },
   });
 
-  return documents.map((document) => ({
+  const visibleDocuments = scope.latestVersionOnly
+    ? documents.filter((document) =>
+        isPublishedVersion(document.versions[0]),
+      )
+    : documents;
+
+  return visibleDocuments.map((document) => ({
     id: document.id,
     titre: document.titre,
     serviceId: document.serviceId,
     service: document.service?.nom ?? "Toute la société",
+
     collaboratorsAllowed:
       document.rolesAutorises.includes(Role.COLLABORATEUR),
+
     revision: document.dateRevision.toISOString(),
     version: document.versions[0]?.numero ?? null,
     statut: document.versions[0]?.statut ?? null,
+
     versions: document.versions.map((version) => ({
       ...version,
       creeLe: version.creeLe.toISOString(),

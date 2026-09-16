@@ -42,4 +42,5 @@ export type DocumentItem = {
 export type DocumentsLibraryProps = {
   documents: DocumentItem[];
   services: ServiceOption[];
+  canManageDocuments: boolean;
 };

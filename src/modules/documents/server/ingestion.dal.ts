@@ -352,7 +352,8 @@ export async function completeIngestion(input: unknown) {
           id: data.versionId,
         },
         data: {
-          statut: StatutVersion.A_VALIDER,
+          statut: StatutVersion.PUBLIEE,
+          publieLe: new Date(),
         },
       });
 

@@ -4,6 +4,7 @@ import {
   useActionState,
   useEffect,
   useId,
+  useRef,
   useState,
 } from "react";
 
@@ -50,6 +51,7 @@ export function DocumentForm({
   const id = useId();
   const editing = Boolean(document);
   const currentVersion = document?.versions[0];
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentPdfUrl =
     document && currentVersion
@@ -292,24 +294,64 @@ export function DocumentForm({
               : "Sélectionne un fichier PDF de 3 Mo maximum."}
           </p>
 
-          <input
-            id={`${id}-file`}
-            name="fichier"
-            type="file"
-            accept=".pdf,application/pdf"
-            required={!editing}
-            aria-describedby={`${id}-file-help`}
-            onChange={(event) => {
-              setClientError("");
-              setSelectedFilename(
-                event.target.files?.[0]?.name ?? "",
-              );
-            }}
-            className="mt-3 block w-full text-sm text-[#526A5E]
-              file:mr-3 file:rounded-lg file:border-0
-              file:bg-[#E5ECE3] file:px-3 file:py-2.5
-              file:text-sm file:font-medium file:text-[#285448]"
-          />
+         <input
+  ref={fileInputRef}
+  id={`${id}-file`}
+  name="fichier"
+  type="file"
+  accept=".pdf,application/pdf"
+  required={!editing}
+  aria-describedby={`${id}-file-help`}
+  onChange={(event) => {
+    setClientError("");
+    setSelectedFilename(
+      event.target.files?.[0]?.name ?? "",
+    );
+  }}
+  className="mt-3 block w-full text-sm text-[#526A5E]
+    file:mr-3 file:rounded-lg file:border-0
+    file:bg-[#E5ECE3] file:px-3 file:py-2.5
+    file:text-sm file:font-medium file:text-[#285448]"
+/>
+
+{editing && (
+  <div className="mt-3">
+    {selectedFilename ? (
+      <>
+        <p className="text-xs leading-5 text-[#65716A]">
+          Ce fichier créera une nouvelle version.
+          Les versions précédentes seront archivées.
+        </p>
+
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            if (fileInputRef.current) {
+              fileInputRef.current.value = "";
+            }
+
+            setSelectedFilename("");
+            setClientError("");
+          }}
+          className="mt-2 min-h-10 rounded-lg px-3
+            text-sm font-medium text-[#285448]
+            hover:bg-[#E5ECE3]
+            focus-visible:outline-none focus-visible:ring-2
+            focus-visible:ring-[#285448]
+            disabled:opacity-50"
+        >
+          Conserver le PDF actuel
+        </button>
+      </>
+    ) : (
+      <p className="text-xs leading-5 text-[#65716A]">
+        Le PDF actuel sera conservé. Seules les autres
+        informations du document seront modifiées.
+      </p>
+    )}
+  </div>
+)}
 
           {editing && selectedFilename && (
             <p className="mt-3 text-xs leading-5 text-[#65716A]">

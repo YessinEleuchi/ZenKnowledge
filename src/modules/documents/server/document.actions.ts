@@ -1,13 +1,16 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 
 import { requireCompanyManager } from "@/server/auth/session";
+
 import {
   uploadPdf,
   deleteStoredFile,
 } from "@/server/storage/s3";
+
 import { triggerDocumentIngestion } from
   "@/server/workflows/ingestion";
 
@@ -28,8 +31,15 @@ const MAX_PDF_SIZE = 3 * 1024 * 1024;
 const UUID =
   /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
-function textField(formData: FormData, name: string) {
+type NewDocumentVersion = {
+  versionId: string;
+  cleStockage: string;
+  nomFichier: string;
+};
+
+function textField(formData: FormData, name: string): string {
   const value = formData.get(name);
+
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -50,11 +60,33 @@ function parseDate(value: string): Date | null {
   return date;
 }
 
+function optionalPdfField(formData: FormData): File | null {
+  const value = formData.get("fichier");
+
+  if (value === null) {
+    return null;
+  }
+
+  if (!(value instanceof File)) {
+    throw new DocumentInputError("Le fichier est invalide.");
+  }
+
+  // Aucun fichier sélectionné dans le formulaire.
+  if (value.name === "" && value.size === 0) {
+    return null;
+  }
+
+  // Un véritable fichier sélectionné, même vide,
+  // sera soumis aux validations ci-dessous.
+  return value;
+}
+
 async function saveDocument(
   mode: "create" | "update",
   formData: FormData,
 ): Promise<DocumentActionState> {
   // Hors du catch pour préserver la redirection d’authentification.
+  // Création et modification restent réservées aux gestionnaires.
   const actor = await requireCompanyManager();
 
   let uploadedKey: string | null = null;
@@ -62,10 +94,14 @@ async function saveDocument(
 
   try {
     const titre = textField(formData, "titre");
-    const serviceId = textField(formData, "serviceId") || null;
+
+    const serviceId =
+      textField(formData, "serviceId") || null;
+
     const dateRevision = parseDate(
       textField(formData, "dateRevision"),
     );
+
     const accessibleCollaborateurs =
       formData.get("accessibleCollaborateurs") === "on";
 
@@ -81,7 +117,10 @@ async function saveDocument(
       throw new DocumentInputError("Document invalide.");
     }
 
-    if (expectedVersionId && !UUID.test(expectedVersionId)) {
+    if (
+      expectedVersionId !== null &&
+      !UUID.test(expectedVersionId)
+    ) {
       throw new DocumentInputError("Version invalide.");
     }
 
@@ -97,8 +136,10 @@ async function saveDocument(
       );
     }
 
-    if (serviceId && !UUID.test(serviceId)) {
-      throw new DocumentInputError("Le service est invalide.");
+    if (serviceId !== null && !UUID.test(serviceId)) {
+      throw new DocumentInputError(
+        "Le service est invalide.",
+      );
     }
 
     if (mode === "update") {
@@ -111,29 +152,22 @@ async function saveDocument(
       );
     }
 
-    const fichier = formData.get("fichier");
+    const fichier = optionalPdfField(formData);
 
-    if (fichier !== null && !(fichier instanceof File)) {
-      throw new DocumentInputError("Le fichier est invalide.");
-    }
-
-    const hasFile =
-      fichier instanceof File &&
-      (fichier.name !== "" || fichier.size > 0);
-
-    if (mode === "create" && !hasFile) {
+    // Le PDF est obligatoire uniquement à la création.
+    if (mode === "create" && fichier === null) {
       throw new DocumentInputError("Sélectionne un PDF.");
     }
 
-    let newVersion: {
-      versionId: string;
-      cleStockage: string;
-      nomFichier: string;
-    } | null = null;
+    // En modification, null signifie :
+    // conserver le PDF et la version actuels.
+    let newVersion: NewDocumentVersion | null = null;
 
-    if (fichier instanceof File && hasFile) {
+    if (fichier !== null) {
       if (fichier.size === 0) {
-        throw new DocumentInputError("Le PDF est vide.");
+        throw new DocumentInputError(
+          "Le fichier PDF sélectionné est vide.",
+        );
       }
 
       if (fichier.size > MAX_PDF_SIZE) {
@@ -148,8 +182,12 @@ async function saveDocument(
         );
       }
 
-      const body = Buffer.from(await fichier.arrayBuffer());
+      const body = Buffer.from(
+        await fichier.arrayBuffer(),
+      );
 
+      // Contrôle de signature.
+      // L’analyse du contenu est réalisée pendant l’ingestion.
       if (body.subarray(0, 5).toString("ascii") !== "%PDF-") {
         throw new DocumentInputError(
           "Le fichier ne possède pas une signature PDF valide.",
@@ -170,6 +208,7 @@ async function saveDocument(
           .slice(0, 255) || "document.pdf";
 
       await uploadPdf(cleStockage, body);
+
       uploadedKey = cleStockage;
 
       newVersion = {
@@ -188,7 +227,7 @@ async function saveDocument(
     };
 
     if (mode === "create") {
-      if (!newVersion) {
+      if (newVersion === null) {
         throw new DocumentInputError("Sélectionne un PDF.");
       }
 
@@ -197,6 +236,8 @@ async function saveDocument(
         ...newVersion,
       });
     } else {
+      // Sans nouveau PDF, le DAL modifie uniquement
+      // les informations du document.
       await updateDocumentRecord({
         ...fields,
         expectedVersionId,
@@ -204,13 +245,16 @@ async function saveDocument(
       });
     }
 
-    // L’écriture en base a réussi : ne plus supprimer ce fichier.
+    // L’écriture en base a réussi :
+    // le fichier téléversé est maintenant référencé.
     uploadedKey = null;
 
-    // Aucun nouveau PDF = aucune nouvelle ingestion.
+    // Aucun nouveau PDF = aucune ingestion.
     versionToIngest = newVersion?.versionId ?? null;
   } catch (error) {
-    if (uploadedKey) {
+    // Compensation uniquement pour le nouveau fichier téléversé.
+    // Le PDF existant n’est jamais supprimé ici.
+    if (uploadedKey !== null) {
       try {
         await deleteStoredFile(uploadedKey);
       } catch (cleanupError) {
@@ -229,7 +273,10 @@ async function saveDocument(
       };
     }
 
-    console.error("Échec de l’enregistrement :", error);
+    console.error(
+      "Échec de l’enregistrement du document :",
+      error,
+    );
 
     return {
       success: false,
@@ -238,47 +285,54 @@ async function saveDocument(
     };
   }
 
-  // Le document est enregistré.
-  // Les erreurs suivantes concernent uniquement l’ingestion.
+  // Les informations sont enregistrées.
+  // Sans nouveau PDF, aucun appel au workflow n’est nécessaire.
+  if (versionToIngest === null) {
+    revalidatePath("/documents");
+
+    return {
+      success: true,
+      message:
+        "Modifications enregistrées. Le PDF actuel a été conservé.",
+    };
+  }
+
   let ingestionDispatchConfirmed = false;
+  let executionId: string | null = null;
 
-  if (versionToIngest) {
-    let executionId: string | null = null;
+  try {
+    const ingestion = await prepareDocumentIngestion(
+      versionToIngest,
+    );
 
-    try {
-      const ingestion = await prepareDocumentIngestion(
-        versionToIngest,
-      );
+    executionId = ingestion.executionId;
 
-      executionId = ingestion.executionId;
+    await triggerDocumentIngestion(ingestion);
 
-      await triggerDocumentIngestion(ingestion);
+    ingestionDispatchConfirmed = true;
+  } catch (error) {
+    console.error(
+      "Préparation ou déclenchement de l’ingestion non confirmé :",
+      versionToIngest,
+      error,
+    );
 
-      ingestionDispatchConfirmed = true;
-    } catch (error) {
-      console.error(
-        "Préparation ou déclenchement de l’ingestion non confirmé :",
-        versionToIngest,
-        error,
-      );
-
-      if (executionId) {
-        try {
-          await recordIngestionDispatchIssue(executionId);
-        } catch (trackingError) {
-          console.error(
-            "Impossible d’enregistrer le problème de déclenchement :",
-            executionId,
-            trackingError,
-          );
-        }
+    if (executionId !== null) {
+      try {
+        await recordIngestionDispatchIssue(executionId);
+      } catch (trackingError) {
+        console.error(
+          "Impossible d’enregistrer le problème de déclenchement :",
+          executionId,
+          trackingError,
+        );
       }
     }
   }
 
   revalidatePath("/documents");
 
-  if (versionToIngest && !ingestionDispatchConfirmed) {
+  if (!ingestionDispatchConfirmed) {
     return {
       success: true,
       message:
@@ -286,19 +340,12 @@ async function saveDocument(
     };
   }
 
-  if (versionToIngest) {
-    return {
-      success: true,
-      message:
-        mode === "create"
-          ? "Document ajouté. Demande d’ingestion transmise."
-          : "Nouvelle version enregistrée. Demande d’ingestion transmise.",
-    };
-  }
-
   return {
     success: true,
-    message: "Modifications enregistrées.",
+    message:
+      mode === "create"
+        ? "Document ajouté. Demande d’ingestion transmise."
+        : "Nouvelle version enregistrée. Demande d’ingestion transmise.",
   };
 }
 

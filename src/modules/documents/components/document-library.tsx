@@ -112,8 +112,10 @@ function StatusBadge({
 
 function DocumentPreview({
   document,
+  canManageDocuments,
 }: {
   document: DocumentItem;
+  canManageDocuments: boolean;
 }) {
   const selectId = useId();
 
@@ -121,9 +123,15 @@ function DocumentPreview({
     document.versions[0]?.id ?? "",
   );
 
-  const selected =
-    document.versions.find((version) => version.id === selectedId) ??
-    document.versions[0];
+  // Le DAL doit déjà limiter les versions retournées
+  // aux collaborateurs. Ceci adapte uniquement l’affichage.
+  const selected = canManageDocuments
+    ? (
+        document.versions.find(
+          (version) => version.id === selectedId,
+        ) ?? document.versions[0]
+      )
+    : document.versions[0];
 
   if (!selected) {
     return (
@@ -138,32 +146,50 @@ function DocumentPreview({
   return (
     <div className="p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <label
-            htmlFor={selectId}
-            className="mb-1.5 block text-xs text-[#65716A]"
-          >
-            Version à consulter
-          </label>
+        {canManageDocuments ? (
+          <div className="min-w-0">
+            <label
+              htmlFor={selectId}
+              className="mb-1.5 block text-xs text-[#65716A]"
+            >
+              Version à consulter
+            </label>
 
-          <select
-            id={selectId}
-            value={selected.id}
-            onChange={(event) => setSelectedId(event.target.value)}
-            className="min-h-11 max-w-full rounded-lg border
-              border-[#DDE3DC] bg-white px-3 text-sm
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-[#285448]"
-          >
-            {document.versions.map((version) => (
-              <option key={version.id} value={version.id}>
-                V{version.numero} — {STATUSES[version.statut].label}
-                {" — "}
-                {dateFormatter.format(new Date(version.creeLe))}
-              </option>
-            ))}
-          </select>
-        </div>
+            <select
+              id={selectId}
+              value={selected.id}
+              onChange={(event) =>
+                setSelectedId(event.target.value)
+              }
+              className="min-h-11 max-w-full rounded-lg border
+                border-[#DDE3DC] bg-white px-3 text-sm
+                focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-[#285448]"
+            >
+              {document.versions.map((version) => (
+                <option key={version.id} value={version.id}>
+                  V{version.numero} — {STATUSES[version.statut].label}
+                  {" — "}
+                  {dateFormatter.format(new Date(version.creeLe))}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="min-w-0">
+            <p className="text-xs text-[#65716A]">
+              Version du document
+            </p>
+
+            <div className="mt-2 flex items-center gap-3">
+              <span className="text-sm font-medium text-[#243E35]">
+                Version {selected.numero}
+              </span>
+
+              <StatusBadge statut={selected.statut} />
+            </div>
+          </div>
+        )}
 
         <a
           href={fileUrl(document.id, selected.id, true)}
@@ -216,6 +242,7 @@ function DocumentPreview({
 export function DocumentsLibrary({
   documents,
   services,
+  canManageDocuments,
 }: DocumentsLibraryProps) {
   const id = useId();
 
@@ -246,19 +273,31 @@ export function DocumentsLibrary({
     ).includes(normalizedQuery);
 
     const matchesStatus =
-      status === "" || document.statut === status;
+      !canManageDocuments ||
+      status === "" ||
+      document.statut === status;
 
     return matchesQuery && matchesStatus;
   });
 
-  const hasFilters = query.trim() !== "" || status !== "";
+  const hasFilters =
+    query.trim() !== "" ||
+    (canManageDocuments && status !== "");
 
   function openCreate() {
+    if (!canManageDocuments) {
+      return;
+    }
+
     setNotice("");
     setEditor({ mode: "create" });
   }
 
   function openEdit(document: DocumentItem) {
+    if (!canManageDocuments) {
+      return;
+    }
+
     setNotice("");
     setEditor({ mode: "edit", document });
   }
@@ -287,20 +326,22 @@ export function DocumentsLibrary({
           </div>
         </div>
 
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          onClick={openCreate}
-          className={`${actionClass} w-full bg-[#285448]
-            text-white hover:bg-[#1E4238] sm:w-auto`}
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          Ajouter un PDF
-        </button>
+        {canManageDocuments && (
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={openCreate}
+            className={`${actionClass} w-full bg-[#285448]
+              text-white hover:bg-[#1E4238] sm:w-auto`}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Ajouter un PDF
+          </button>
+        )}
       </header>
 
       <div role="status" aria-live="polite">
-        {notice && (
+        {canManageDocuments && notice && (
           <p className="rounded-lg border border-[#DDE3DC] bg-[#EAF2E8] px-4 py-3 text-sm text-[#365C3D]">
             {notice}
           </p>
@@ -332,33 +373,43 @@ export function DocumentsLibrary({
             />
           </div>
 
-          <label htmlFor={`${id}-status`} className="sr-only">
-            Filtrer par statut
-          </label>
+          {canManageDocuments && (
+            <div>
+              <label
+                htmlFor={`${id}-status`}
+                className="sr-only"
+              >
+                Filtrer par statut
+              </label>
 
-          <select
-            id={`${id}-status`}
-            value={status}
-            onChange={(event) => {
-              const value = event.target.value;
+              <select
+                id={`${id}-status`}
+                value={status}
+                onChange={(event) => {
+                  const value = event.target.value;
 
-              setStatus(
-                STATUS_VALUES.find((item) => item === value) ?? "",
-              );
-            }}
-            className="h-11 rounded-lg border border-[#DDE3DC]
-              bg-white px-3 text-sm text-[#526A5E]
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-[#285448] sm:w-48"
-          >
-            <option value="">Tous les statuts</option>
+                  setStatus(
+                    STATUS_VALUES.find(
+                      (item) => item === value,
+                    ) ?? "",
+                  );
+                }}
+                className="h-11 w-full rounded-lg border
+                  border-[#DDE3DC] bg-white px-3 text-sm
+                  text-[#526A5E] focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-[#285448] sm:w-48"
+              >
+                <option value="">Tous les statuts</option>
 
-            {STATUS_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {STATUSES[value].label}
-              </option>
-            ))}
-          </select>
+                {STATUS_VALUES.map((value) => (
+                  <option key={value} value={value}>
+                    {STATUSES[value].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {hasFilters && (
             <button
@@ -381,23 +432,43 @@ export function DocumentsLibrary({
           />
 
           <h2 className="font-medium text-[#243E35]">
-            {documents.length === 0
-              ? "Ajoutez votre premier document"
-              : "Aucun document trouvé"}
+            {documents.length > 0
+              ? "Aucun document trouvé"
+              : canManageDocuments
+                ? "Ajoutez votre premier document"
+                : "Aucun document disponible"}
           </h2>
 
-          <button
-            type="button"
-            onClick={
-              documents.length === 0 ? openCreate : clearFilters
-            }
-            className={`${actionClass} mt-3 text-[#285448]
-              hover:bg-[#EDF1EB]`}
-          >
-            {documents.length === 0
-              ? "Ajouter un PDF"
-              : "Effacer les filtres"}
-          </button>
+          {documents.length === 0 && !canManageDocuments && (
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#65716A]">
+              Aucun document publié n’est actuellement accessible
+              pour votre service. Contactez votre gestionnaire si
+              nécessaire.
+            </p>
+          )}
+
+          {documents.length === 0 && canManageDocuments && (
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              onClick={openCreate}
+              className={`${actionClass} mt-3 text-[#285448]
+                hover:bg-[#EDF1EB]`}
+            >
+              Ajouter un PDF
+            </button>
+          )}
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className={`${actionClass} mt-3 text-[#285448]
+                hover:bg-[#EDF1EB]`}
+            >
+              Effacer les filtres
+            </button>
+          )}
         </div>
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -441,17 +512,19 @@ export function DocumentsLibrary({
                         </dd>
                       </div>
 
-                      <div>
-                        <dt className="text-xs text-[#65716A]">
-                          Accès après publication
-                        </dt>
+                      {canManageDocuments && (
+                        <div>
+                          <dt className="text-xs text-[#65716A]">
+                            Accès après publication
+                          </dt>
 
-                        <dd className="mt-0.5 text-[#526A5E]">
-                          {document.collaboratorsAllowed
-                            ? "Gestionnaire et collaborateurs"
-                            : "Gestionnaire"}
-                        </dd>
-                      </div>
+                          <dd className="mt-0.5 text-[#526A5E]">
+                            {document.collaboratorsAllowed
+                              ? "Gestionnaire et collaborateurs"
+                              : "Gestionnaire"}
+                          </dd>
+                        </div>
+                      )}
 
                       <div>
                         <dt className="text-xs text-[#65716A]">
@@ -476,7 +549,8 @@ export function DocumentsLibrary({
                       onClick={() => setPreviewId(document.id)}
                       className={`${actionClass} bg-[#E5ECE3]
                         text-[#285448] hover:bg-[#DCE7DA]
-                        disabled:cursor-not-allowed disabled:opacity-40`}
+                        disabled:cursor-not-allowed
+                        disabled:opacity-40`}
                     >
                       <Eye aria-hidden="true" className="size-4" />
                       Aperçu
@@ -484,7 +558,11 @@ export function DocumentsLibrary({
 
                     {latest && (
                       <a
-                        href={fileUrl(document.id, latest.id, true)}
+                        href={fileUrl(
+                          document.id,
+                          latest.id,
+                          true,
+                        )}
                         aria-label={`Télécharger ${document.titre}`}
                         title="Télécharger le PDF"
                         className={`${actionClass} text-[#526A5E]
@@ -494,24 +572,29 @@ export function DocumentsLibrary({
                           aria-hidden="true"
                           className="size-4"
                         />
-                        <span className="sr-only">Télécharger</span>
+
+                        <span className="sr-only">
+                          Télécharger
+                        </span>
                       </a>
                     )}
 
-                    <button
-                      type="button"
-                      aria-haspopup="dialog"
-                      aria-label={`Modifier ${document.titre}`}
-                      onClick={() => openEdit(document)}
-                      className={`${actionClass} ml-auto
-                        text-[#526A5E] hover:bg-[#EDF1EB]`}
-                    >
-                      <Pencil
-                        aria-hidden="true"
-                        className="size-4"
-                      />
-                      Modifier
-                    </button>
+                    {canManageDocuments && (
+                      <button
+                        type="button"
+                        aria-haspopup="dialog"
+                        aria-label={`Modifier ${document.titre}`}
+                        onClick={() => openEdit(document)}
+                        className={`${actionClass} ml-auto
+                          text-[#526A5E] hover:bg-[#EDF1EB]`}
+                      >
+                        <Pencil
+                          aria-hidden="true"
+                          className="size-4"
+                        />
+                        Modifier
+                      </button>
+                    )}
                   </div>
                 </article>
               </li>
@@ -535,11 +618,12 @@ export function DocumentsLibrary({
           <DocumentPreview
             key={previewDocument.id}
             document={previewDocument}
+            canManageDocuments={canManageDocuments}
           />
         </DocumentModal>
       )}
 
-      {editor && (
+      {canManageDocuments && editor && (
         <DocumentEditorModal
           key={
             editor.mode === "create"
