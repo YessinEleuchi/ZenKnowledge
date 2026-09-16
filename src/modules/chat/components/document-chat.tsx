@@ -7,10 +7,22 @@ import {
   useState,
 } from "react";
 
+import {
+  ArrowUp,
+  FileSearch,
+  Sparkles,
+} from "lucide-react";
+
 import { askDocumentQuestion } from "../server/chat-answer.actions";
-import type { ChatAnswerResult } from "../chat.types";
+
+import type {
+  ChatAnswerResult,
+  ChatCitation,
+  StoredConversation,
+} from "../chat.types";
+
 import { SourcePreview } from "./source-preview";
-import { ChatCitation } from "../chat.types";
+
 
 
 type Exchange = {
@@ -19,11 +31,70 @@ type Exchange = {
   result: ChatAnswerResult;
 };
 
+
 const suggestions = [
   "Combien de jours de congés annuels avons-nous ?",
   "Comment demander un congé ?",
   "Quel est le délai de validation ?",
 ];
+
+
+function createInitialExchanges(
+  conversation: StoredConversation | null,
+): Exchange[] {
+  if (!conversation) {
+    return [];
+  }
+
+  const exchanges: Exchange[] = [];
+
+  let currentQuestion:
+    | StoredConversation["messages"][number]
+    | null = null;
+
+  for (const message of conversation.messages) {
+    if (message.role === "USER") {
+      currentQuestion = message;
+      continue;
+    }
+
+    if (
+      message.role === "ASSISTANT" &&
+      currentQuestion
+    ) {
+      exchanges.push({
+        id: message.id,
+
+        question:
+          currentQuestion.contenu,
+
+        result: {
+          success: true,
+
+          questionMessageId:
+            currentQuestion.id,
+
+          assistantMessageId:
+            message.id,
+
+          reponse:
+            message.contenu,
+
+          sourcesInsuffisantes:
+            message.sourcesInsuffisantes,
+
+          citations:
+            message.citations,
+        },
+      });
+
+      currentQuestion = null;
+    }
+  }
+
+  return exchanges;
+}
+
 
 function AnswerText({
   text,
@@ -33,282 +104,602 @@ function AnswerText({
   citations: ChatCitation[];
 }) {
   return (
-    <div className="whitespace-pre-wrap break-words leading-7">
-      {text.split(/(\[\d+\])/g).map((part, index) => {
-        const match = part.match(/^\[(\d+)\]$/);
+    <div className="whitespace-pre-wrap break-words text-[15px] leading-7 text-[#2A342E]">
+      {text
+        .split(/(\[\d+\])/g)
+        .map((part, index) => {
+          const match =
+            part.match(/^\[(\d+)\]$/);
 
-        if (!match) {
-          return <span key={index}>{part}</span>;
-        }
+          if (!match) {
+            return (
+              <span key={index}>
+                {part}
+              </span>
+            );
+          }
 
-        const numero = Number(match[1]);
-        const citation = citations.find(
-          (item) => item.numero === numero,
-        );
+          const numero =
+            Number(match[1]);
 
-        if (!citation) {
-          return <span key={index}>{part}</span>;
-        }
+          const citation =
+            citations.find(
+              (item) =>
+                item.numero === numero,
+            );
 
-        return (
-          <SourcePreview
-            key={index}
-            citation={citation}
-            inline
-          />
-        );
-      })}
+          if (!citation) {
+            return (
+              <span key={index}>
+                {part}
+              </span>
+            );
+          }
+
+          return (
+            <SourcePreview
+              key={index}
+              citation={citation}
+              inline
+            />
+          );
+        })}
     </div>
   );
 }
 
-export function DocumentChat() {
-  const [draft, setDraft] = useState("");
-  const [submitted, setSubmitted] = useState("");
-  const textarea = useRef<HTMLTextAreaElement>(null);
-  const bottom = useRef<HTMLDivElement>(null);
 
-  const [exchanges, submitAction, pending] = useActionState(
+function Sources({
+  citations,
+  exchangeId,
+}: {
+  citations: ChatCitation[];
+  exchangeId: string;
+}) {
+  if (citations.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 border-t border-[#E3E8E3] pt-4">
+      <div className="mb-3 flex items-center gap-2">
+        <FileSearch
+          aria-hidden="true"
+          className="size-4 text-[#65716A]"
+          strokeWidth={1.8}
+        />
+
+        <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#65716A]">
+          Sources
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {citations.map(
+          (citation) => (
+            <div
+              key={citation.numero}
+              id={`source-${exchangeId}-${citation.numero}`}
+              className="flex flex-col gap-3 rounded-xl border border-[#E0E6DF] bg-[#FAFBF9] px-4 py-3 sm:flex-row sm:items-center"
+            >
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#E8F0E6] text-xs font-semibold text-[#285448]">
+                  {citation.numero}
+                </span>
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[#243E35]">
+                    {citation.titre}
+                  </p>
+
+                  <p className="mt-0.5 text-xs text-[#758179]">
+                    Version{" "}
+                    {citation.numeroVersion}
+
+                    {citation.reperePassage
+                      ? ` · ${citation.reperePassage}`
+                      : ""}
+
+                    {citation.pageDebut !== null
+                      ? ` · Page ${citation.pageDebut}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                <SourcePreview
+                  citation={citation}
+                />
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+export function DocumentChat({
+  initialConversation,
+}: {
+  initialConversation:
+    | StoredConversation
+    | null;
+}) {
+  const [draft, setDraft] =
+    useState("");
+
+  const [
+    submitted,
+    setSubmitted,
+  ] = useState("");
+
+  const textarea =
+    useRef<HTMLTextAreaElement>(
+      null,
+    );
+
+  const bottom =
+    useRef<HTMLDivElement>(
+      null,
+    );
+
+  const initialScrollDone =
+    useRef(false);
+
+  const initialExchanges =
+    createInitialExchanges(
+      initialConversation,
+    );
+
+  const [
+    exchanges,
+    submitAction,
+    pending,
+  ] = useActionState(
     async (
       previous: Exchange[],
       formData: FormData,
     ): Promise<Exchange[]> => {
-      const question = String(formData.get("question") ?? "").trim();
-      const result = await askDocumentQuestion(formData);
+      const question =
+        String(
+          formData.get("question") ??
+            "",
+        ).trim();
+
+     
+      setDraft("");
+
+      const result =
+        await askDocumentQuestion(
+          formData,
+        );
 
       return [
         ...previous,
+
         {
-          id: crypto.randomUUID(),
+          id:
+            result.success
+              ? result.assistantMessageId
+              : crypto.randomUUID(),
+
           question,
           result,
         },
       ];
     },
-    [],
+
+    initialExchanges,
   );
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
-  }, [exchanges, pending]);
+    const element =
+      textarea.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.style.height = "auto";
+
+    const nextHeight =
+      Math.min(
+        element.scrollHeight,
+        128,
+      );
+
+    element.style.height =
+      `${Math.max(nextHeight, 44)}px`;
+  }, [draft]);
+
+
 
   useEffect(() => {
-    if (!pending && exchanges.length > 0) {
+    const behavior =
+      initialScrollDone.current
+        ? "smooth"
+        : "auto";
+
+    bottom.current?.scrollIntoView({
+      behavior,
+      block: "end",
+    });
+
+    initialScrollDone.current =
+      true;
+  }, [
+    exchanges.length,
+    pending,
+  ]);
+
+ 
+
+  useEffect(() => {
+    if (
+      !pending &&
+      exchanges.length > 0
+    ) {
       textarea.current?.focus();
     }
-  }, [pending, exchanges.length]);
+  }, [
+    pending,
+    exchanges.length,
+  ]);
 
-  function reuseQuestion(question: string) {
+
+  function reuseQuestion(
+    question: string,
+  ) {
     setDraft(question);
-    textarea.current?.focus();
+
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+    });
   }
 
+
   return (
-    <section className="mx-auto flex h-[calc(100dvh-8rem)] min-h-[480px] max-w-4xl flex-col overflow-hidden rounded-2xl border border-[#DDE3DC] bg-[#F8FAF7] text-[#202923]">
-      <header className="border-b border-[#DDE3DC] bg-white px-5 py-4 sm:px-7">
-        <h1 className="text-xl font-semibold">Assistant documentaire</h1>
-        <p className="mt-1 text-sm text-[#65716A]">
-          Des réponses fondées sur vos documents accessibles.
-        </p>
+    <section className="flex h-[calc(100dvh-7rem)] min-h-[520px] w-full flex-col overflow-hidden text-[#202923]">
+
+
+
+      <header className="shrink-0 border-b border-[#DDE3DC] bg-[#F7F8F5] pb-4">
+        <div className="mx-auto w-full max-w-4xl">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#E5ECE3]">
+              <Sparkles
+                aria-hidden="true"
+                className="size-[18px] text-[#285448]"
+                strokeWidth={1.8}
+              />
+            </div>
+
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-[#202923] sm:text-[22px]">
+                Assistant documentaire
+              </h1>
+
+              <p className="mt-1 text-sm leading-5 text-[#65716A]">
+                Interrogez les documents
+                accessibles à votre
+                organisation.
+              </p>
+            </div>
+          </div>
+        </div>
       </header>
 
       <div
-        className="flex-1 space-y-7 overflow-y-auto px-4 py-6 sm:px-7"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         aria-label="Conversation"
         aria-busy={pending}
       >
-        {exchanges.length === 0 && !pending && (
-          <div className="mx-auto max-w-xl py-10 text-center">
-            <span className="rounded-full bg-[#EAF2E8] px-3 py-1 text-xs font-medium text-[#173E36]">
-              Vos documents, plus faciles à consulter
-            </span>
+        <div className="mx-auto w-full max-w-4xl space-y-9 px-1 py-8 sm:px-4">
+          {exchanges.length === 0 &&
+            !pending && (
+              <div className="mx-auto flex max-w-2xl flex-col items-center py-12 text-center sm:py-16">
+                <div className="flex size-12 items-center justify-center rounded-2xl border border-[#DCE4DB] bg-white shadow-sm">
+                  <Sparkles
+                    aria-hidden="true"
+                    className="size-5 text-[#285448]"
+                    strokeWidth={1.8}
+                  />
+                </div>
 
-            <h2 className="mt-5 text-2xl font-semibold">
-              Que souhaitez-vous savoir ?
-            </h2>
+                <h2 className="mt-5 text-xl font-semibold tracking-tight text-[#202923] sm:text-2xl">
+                  Que souhaitez-vous savoir ?
+                </h2>
 
-            <p className="mt-3 text-sm leading-6 text-[#65716A]">
-              Posez une question précise. Chaque réponse documentée
-              vous permet de consulter les extraits utilisés.
-            </p>
-
-            <div className="mt-6 grid gap-2 text-left">
-              {suggestions.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  onClick={() => reuseQuestion(question)}
-                  className="rounded-xl border border-[#DDE3DC] bg-white px-4 py-3 text-sm transition hover:border-[#173E36] hover:bg-[#F0F5EF] focus-visible:outline-2 focus-visible:outline-[#173E36]"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {exchanges.map((exchange) => (
-          <article key={exchange.id} className="space-y-4">
-            <div className="ml-auto max-w-[90%] rounded-2xl rounded-br-sm bg-[#173E36] px-4 py-3 text-white sm:max-w-[80%]">
-              <p className="mb-1 text-xs text-white/70">Vous</p>
-              <p className="whitespace-pre-wrap break-words">
-                {exchange.question}
-              </p>
-            </div>
-
-            {!exchange.result.success ? (
-              <div
-                role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
-              >
-                <p>{exchange.result.message}</p>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => reuseQuestion(exchange.question)}
-                  className="mt-2 font-semibold underline disabled:opacity-50"
-                >
-                  Reprendre cette question
-                </button>
-              </div>
-            ) : (
-              <div className="rounded-2xl rounded-tl-sm border border-[#DDE3DC] bg-white p-5">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#65716A]">
-                  Assistant
+                <p className="mt-2 max-w-lg text-sm leading-6 text-[#65716A]">
+                  Posez une question sur
+                  les documents mis à votre
+                  disposition. Les sources
+                  utilisées restent
+                  consultables.
                 </p>
 
-                {exchange.result.sourcesInsuffisantes && (
-                  <p className="mb-3 inline-block rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
-                    Informations insuffisantes
-                  </p>
-                )}
+                <div className="mt-7 grid w-full gap-2 sm:grid-cols-3">
+                  {suggestions.map(
+                    (question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        onClick={() =>
+                          reuseQuestion(
+                            question,
+                          )
+                        }
+                        className="min-h-16 rounded-xl border border-[#DDE3DC] bg-white px-4 py-3 text-left text-sm leading-5 text-[#435148] shadow-[0_1px_2px_rgba(20,40,30,0.03)] transition hover:border-[#B9C9BC] hover:bg-[#FAFCF9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#285448]/30"
+                      >
+                        {question}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+          {exchanges.map(
+            (exchange) => (
+              <article
+                key={exchange.id}
+                className="space-y-5"
+              >
 
-                <AnswerText
-  text={exchange.result.reponse}
-  citations={exchange.result.citations}
-/>
-
-                {exchange.result.citations.length > 0 && (
-                  <div className="mt-5 border-t border-[#E8ECE6] pt-4">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#65716A]">
-                      Sources utilisées
+                <div className="flex justify-end">
+                  <div className="max-w-[92%] rounded-2xl rounded-br-md bg-[#285448] px-4 py-3 text-white sm:max-w-[78%]">
+                    <p className="whitespace-pre-wrap break-words text-[15px] leading-6">
+                      {
+                        exchange.question
+                      }
                     </p>
+                  </div>
+                </div>
 
-                    <div className="grid gap-3">
-                      {exchange.result.citations.map((citation : ChatCitation) => (
-                        <section
-                          key={citation.numero}
-                          id={`source-${exchange.id}-${citation.numero}`}
-                          tabIndex={-1}
-                          className="scroll-mt-4 rounded-xl border border-[#DDE3DC] bg-[#F8FAF7] p-4 target:ring-2 target:ring-[#173E36]"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="rounded-md bg-[#EAF2E8] px-2 py-1 text-xs font-bold text-[#173E36]">
-                              [{citation.numero}]
-                            </span>
 
-                            <div className="min-w-0">
-                              <p className="break-words text-sm font-semibold">
-                                {citation.titre}
-                              </p>
-                              <p className="mt-1 text-xs text-[#65716A]">
-                                Version {citation.numeroVersion}
-                                {" · "}
-                                {citation.reperePassage}
-                                {citation.pageDebut !== null &&
-                                  ` · Page ${citation.pageDebut}`}
-                              </p>
-                            </div>
-                          </div>
+                {!exchange.result
+                  .success ? (
+                  <div className="max-w-[92%]">
+                    <div
+                      role="alert"
+                      className="rounded-xl border border-[#F1D4CE] bg-[#FFF7F5] px-4 py-3"
+                    >
+                      <p className="text-sm leading-6 text-[#843D32]">
+                        {
+                          exchange.result
+                            .message
+                        }
+                      </p>
 
-                          <blockquote className="mt-3 whitespace-pre-wrap break-words border-l-2 border-[#B8CBAF] pl-3 text-sm leading-6 text-[#465348]">
-                            {citation.extrait}
-                          </blockquote>
-                            <SourcePreview citation={citation} />
-                        </section>
-                      ))}
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          reuseQuestion(
+                            exchange.question,
+                          )
+                        }
+                        className="mt-2 text-sm font-medium text-[#843D32] underline underline-offset-4 disabled:opacity-50"
+                      >
+                        Réessayer cette
+                        question
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+
+                  <div className="max-w-[96%] sm:max-w-[90%]">
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="flex size-7 items-center justify-center rounded-lg bg-[#E5ECE3]">
+                        <Sparkles
+                          aria-hidden="true"
+                          className="size-3.5 text-[#285448]"
+                          strokeWidth={
+                            1.9
+                          }
+                        />
+                      </div>
+
+                      <span className="text-sm font-semibold text-[#243E35]">
+                        Assistant
+                      </span>
+
+                      {exchange.result
+                        .sourcesInsuffisantes && (
+                        <span className="rounded-md bg-[#FAF2DF] px-2 py-1 text-[11px] font-medium text-[#806122]">
+                          Sources
+                          insuffisantes
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="pl-9">
+                      <AnswerText
+                        text={
+                          exchange.result
+                            .reponse
+                        }
+                        citations={
+                          exchange.result
+                            .citations
+                        }
+                      />
+
+                      <Sources
+                        citations={
+                          exchange.result
+                            .citations
+                        }
+                        exchangeId={
+                          exchange.id
+                        }
+                      />
                     </div>
                   </div>
                 )}
+              </article>
+            ),
+          )}
+
+          {pending && (
+            <article className="space-y-5">
+
+              <div className="flex justify-end">
+                <div className="max-w-[92%] rounded-2xl rounded-br-md bg-[#285448] px-4 py-3 text-white sm:max-w-[78%]">
+                  <p className="whitespace-pre-wrap break-words text-[15px] leading-6">
+                    {submitted}
+                  </p>
+                </div>
               </div>
-            )}
-          </article>
-        ))}
 
-        {pending && (
-          <div className="space-y-4">
-            <div className="ml-auto max-w-[90%] rounded-2xl bg-[#173E36] px-4 py-3 text-white">
-              <p className="whitespace-pre-wrap break-words">
-                {submitted}
-              </p>
-            </div>
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex max-w-[90%] items-center gap-3 pl-1 text-sm text-[#65716A]"
+              >
+                <div className="flex size-7 items-center justify-center rounded-lg bg-[#E5ECE3]">
+                  <Sparkles
+                    aria-hidden="true"
+                    className="size-3.5 text-[#285448]"
+                    strokeWidth={1.8}
+                  />
+                </div>
 
-            <p
-              role="status"
-              className="flex items-center gap-3 px-2 text-sm text-[#65716A]"
-            >
-              <span
-                aria-hidden="true"
-                className="h-4 w-4 animate-spin rounded-full border-2 border-[#CBD7C6] border-t-[#173E36] motion-reduce:animate-none"
-              />
-              Recherche des passages et préparation de la réponse…
-            </p>
-          </div>
-        )}
+                <span className="flex items-center gap-2">
+                  <span className="flex gap-1">
+                    <span className="size-1.5 animate-pulse rounded-full bg-[#789087]" />
+                    <span className="size-1.5 animate-pulse rounded-full bg-[#789087] [animation-delay:150ms]" />
+                    <span className="size-1.5 animate-pulse rounded-full bg-[#789087] [animation-delay:300ms]" />
+                  </span>
 
-        <div ref={bottom} />
+                  Recherche dans vos
+                  documents…
+                </span>
+              </div>
+            </article>
+          )}
+
+          <div
+            ref={bottom}
+            className="h-px"
+          />
+        </div>
       </div>
 
-      <form
-        action={submitAction}
-        onSubmit={(event) => {
-          if (pending || draft.trim().length < 3) {
-            event.preventDefault();
-            return;
-          }
 
-          setSubmitted(draft.trim());
-          // Le champ contrôlé reste disponible pour reprendre la question.
-        }}
-        className="border-t border-[#DDE3DC] bg-white p-4"
-      >
-        <label htmlFor="chat-question" className="sr-only">
-          Votre question
-        </label>
+      <div className="shrink-0 border-t border-[#DDE3DC] bg-[#F7F8F5]/95 pt-4 backdrop-blur-sm">
+        <form
+          action={submitAction}
+          onSubmit={(event) => {
+            const value =
+              draft.trim();
 
-        <div className="flex items-end gap-3">
-          <textarea
-            ref={textarea}
-            id="chat-question"
-            name="question"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Posez une question sur vos documents…"
-            required
-            minLength={3}
-            maxLength={2000}
-            readOnly={pending}
-            rows={2}
-            className="min-w-0 flex-1 resize-none rounded-xl border border-[#DDE3DC] bg-[#F8FAF7] px-4 py-3 text-sm outline-none focus:border-[#173E36] focus:ring-2 focus:ring-[#173E36]/10"
-          />
+            if (
+              pending ||
+              value.length < 3
+            ) {
+              event.preventDefault();
+              return;
+            }
 
-          <button
-            type="submit"
-            disabled={pending || draft.trim().length < 3}
-            className="rounded-xl bg-[#173E36] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#245548] disabled:cursor-not-allowed disabled:opacity-50"
+            setSubmitted(value);
+          }}
+          className="mx-auto w-full max-w-4xl"
+        >
+          <label
+            htmlFor="chat-question"
+            className="sr-only"
           >
-            {pending ? "En cours…" : "Envoyer"}
-          </button>
-        </div>
+            Votre question
+          </label>
 
-        <p className="mt-2 text-xs text-[#65716A]">
-          Chaque question est indépendante. Consultez les sources
-          avant de vous appuyer sur une réponse.
-        </p>
-      </form>
+          <div className="flex items-end gap-2 rounded-2xl border border-[#CFD9D0] bg-white p-2 shadow-[0_2px_8px_rgba(28,55,42,0.05)] transition focus-within:border-[#78968A] focus-within:ring-2 focus-within:ring-[#285448]/10">
+            <textarea
+              ref={textarea}
+              id="chat-question"
+              name="question"
+              value={draft}
+              onChange={(event) =>
+                setDraft(
+                  event.target.value,
+                )
+              }
+              onKeyDown={(event) => {
+                if (
+                  event.key !== "Enter" ||
+                  event.shiftKey ||
+                  event.nativeEvent
+                    .isComposing
+                ) {
+                  return;
+                }
+
+                event.preventDefault();
+
+                if (
+                  pending ||
+                  draft.trim()
+                    .length < 3
+                ) {
+                  return;
+                }
+
+                event.currentTarget.form
+                  ?.requestSubmit();
+              }}
+              placeholder="Posez une question sur vos documents…"
+              required
+              minLength={3}
+              maxLength={2000}
+              readOnly={pending}
+              rows={1}
+              aria-describedby="chat-help"
+              className="max-h-32 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#263129] outline-none placeholder:text-[#8A958E] disabled:cursor-not-allowed"
+            />
+
+            <button
+              type="submit"
+              disabled={
+                pending ||
+                draft.trim().length <
+                  3
+              }
+              aria-label={
+                pending
+                  ? "Réponse en cours"
+                  : "Envoyer la question"
+              }
+              title="Envoyer"
+              className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#285448] text-white transition hover:bg-[#1F483D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#285448]/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#AAB7B1]"
+            >
+              <ArrowUp
+                aria-hidden="true"
+                className="size-[18px]"
+                strokeWidth={2}
+              />
+            </button>
+          </div>
+
+          <div className="flex min-h-7 items-center justify-between gap-4 px-2">
+            <p
+              id="chat-help"
+              className="text-[11px] text-[#7B867F]"
+            >
+              Entrée pour envoyer ·
+              Maj + Entrée pour une
+              nouvelle ligne
+            </p>
+
+            <p className="hidden text-[11px] text-[#7B867F] sm:block">
+              Vérifiez les informations
+              importantes dans les
+              sources citées.
+            </p>
+          </div>
+        </form>
+      </div>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   Users,
 } from "lucide-react";
 
@@ -31,8 +32,8 @@ type AppSidebarProps = {
   };
   canManageUsers: boolean;
   canManageCompanies: boolean;
-  canManageDocuments: boolean;
   canConsultDocuments: boolean;
+  canUseChat: boolean;
 };
 
 function LogoutButton() {
@@ -73,13 +74,13 @@ export function AppSidebar({
   user,
   canManageUsers,
   canManageCompanies,
-  canManageDocuments,
   canConsultDocuments,
+  canUseChat,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
 
-  const items = [
+const items = [
   {
     title: "Vue d’ensemble",
     href: "/dashboard",
@@ -91,6 +92,12 @@ export function AppSidebar({
     href: "/documents",
     icon: FileText,
     visible: canConsultDocuments,
+  },
+  {
+    title: "Assistant",
+    href: "/chat",
+    icon: MessageCircle,
+    visible: canUseChat,
   },
   {
     title: "Sociétés",
