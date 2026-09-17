@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 
 function requiredEnv(name: string): string {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
 
   if (!value) {
     throw new Error(`Variable manquante : ${name}`);
@@ -17,13 +17,23 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function getBucket() {
+  return requiredEnv("S3_BUCKET");
+}
+
 let client: S3Client | undefined;
 
-function getClient() {
-  client ??= new S3Client({
+function getClient(): S3Client {
+  if (client) {
+    return client;
+  }
+
+  client = new S3Client({
     endpoint: requiredEnv("S3_ENDPOINT"),
     region: requiredEnv("S3_REGION"),
+
     forcePathStyle: true,
+
     credentials: {
       accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
       secretAccessKey: requiredEnv("S3_SECRET_ACCESS_KEY"),
@@ -33,10 +43,13 @@ function getClient() {
   return client;
 }
 
-export async function uploadPdf(key: string, body: Buffer) {
+export async function uploadPdf(
+  key: string,
+  body: Buffer,
+): Promise<void> {
   await getClient().send(
     new PutObjectCommand({
-      Bucket: requiredEnv("S3_BUCKET"),
+      Bucket: getBucket(),
       Key: key,
       Body: body,
       ContentType: "application/pdf",
@@ -45,25 +58,31 @@ export async function uploadPdf(key: string, body: Buffer) {
   );
 }
 
-export async function readStoredPdf(key: string) {
+export async function readStoredPdf(
+  key: string,
+): Promise<Uint8Array> {
   const result = await getClient().send(
     new GetObjectCommand({
-      Bucket: requiredEnv("S3_BUCKET"),
+      Bucket: getBucket(),
       Key: key,
     }),
   );
 
   if (!result.Body) {
-    throw new Error("Le fichier stocké est vide.");
+    throw new Error(
+      `Le fichier stocké est vide : ${key}`,
+    );
   }
 
   return result.Body.transformToByteArray();
 }
 
-export async function deleteStoredFile(key: string) {
+export async function deleteStoredFile(
+  key: string,
+): Promise<void> {
   await getClient().send(
     new DeleteObjectCommand({
-      Bucket: requiredEnv("S3_BUCKET"),
+      Bucket: getBucket(),
       Key: key,
     }),
   );
