@@ -1,0 +1,108 @@
+{
+  "name": "Invitation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-invitation",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f4871420-5cba-45df-ac3e-6809c3905fe8",
+      "name": "Webhook",
+      "webhookId": "836cdeee-75b2-4c72-82af-8ea514a9cd43",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0UFIxlpXZcEkiSf1",
+          "name": "Header Auth account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "yessineleuchi2001@gmail.com",
+        "toEmail": "={{ $json.body.email }}",
+        "subject": "Bienvenue sur ZenKnowledge — Activez votre compte",
+        "html": "=<!DOCTYPE html>\n<html lang=\"fr\">\n  <body\n    style=\"\n      margin: 0;\n      padding: 0;\n      background-color: #f5f7f4;\n      font-family: Arial, Helvetica, sans-serif;\n      color: #243e35;\n    \"\n  >\n    <table\n      role=\"presentation\"\n      width=\"100%\"\n      cellspacing=\"0\"\n      cellpadding=\"0\"\n      border=\"0\"\n      style=\"\n        width: 100%;\n        background-color: #f5f7f4;\n        padding: 40px 16px;\n      \"\n    >\n      <tr>\n        <td align=\"center\">\n\n          <table\n            role=\"presentation\"\n            width=\"100%\"\n            cellspacing=\"0\"\n            cellpadding=\"0\"\n            border=\"0\"\n            style=\"\n              width: 100%;\n              max-width: 600px;\n              background-color: #ffffff;\n              border: 1px solid #e1e7e2;\n              border-radius: 16px;\n              overflow: hidden;\n            \"\n          >\n\n            <!-- Header -->\n            <tr>\n              <td\n                style=\"\n                  padding: 28px 32px;\n                  border-bottom: 1px solid #e7ebe7;\n                \"\n              >\n                <table\n                  role=\"presentation\"\n                  cellspacing=\"0\"\n                  cellpadding=\"0\"\n                  border=\"0\"\n                >\n                  <tr>\n                    <td\n                      style=\"\n                        width: 42px;\n                        height: 42px;\n                        background-color: #285448;\n                        border-radius: 10px;\n                        text-align: center;\n                        vertical-align: middle;\n                        color: #ffffff;\n                        font-size: 20px;\n                        font-weight: 700;\n                      \"\n                    >\n                      Z\n                    </td>\n\n                    <td style=\"padding-left: 12px;\">\n                      <div\n                        style=\"\n                          font-size: 18px;\n                          font-weight: 700;\n                          color: #243e35;\n                        \"\n                      >\n                        ZenKnowledge\n                      </div>\n\n                      <div\n                        style=\"\n                          margin-top: 2px;\n                          font-size: 12px;\n                          color: #748078;\n                        \"\n                      >\n                        Espace documentaire intelligent\n                      </div>\n                    </td>\n                  </tr>\n                </table>\n              </td>\n            </tr>\n\n            <!-- Content -->\n            <tr>\n              <td style=\"padding: 36px 32px;\">\n\n                <div\n                  style=\"\n                    display: inline-block;\n                    padding: 6px 10px;\n                    margin-bottom: 18px;\n                    background-color: #eef4f0;\n                    border-radius: 999px;\n                    color: #365c4d;\n                    font-size: 12px;\n                    font-weight: 600;\n                  \"\n                >\n                  Invitation\n                </div>\n\n                <h1\n                  style=\"\n                    margin: 0 0 18px 0;\n                    color: #243e35;\n                    font-size: 26px;\n                    line-height: 1.25;\n                    font-weight: 700;\n                  \"\n                >\n                  Bienvenue sur ZenKnowledge\n                </h1>\n\n                <p\n                  style=\"\n                    margin: 0 0 16px 0;\n                    color: #59675e;\n                    font-size: 15px;\n                    line-height: 1.7;\n                  \"\n                >\n                  Bonjour\n                  <strong style=\"color: #243e35;\">\n                    {{ $json.body.nom }}\n                  </strong>,\n                </p>\n\n                <p\n                  style=\"\n                    margin: 0 0 24px 0;\n                    color: #59675e;\n                    font-size: 15px;\n                    line-height: 1.7;\n                  \"\n                >\n                  Un compte ZenKnowledge vient d'être créé pour vous.\n                  Vous pouvez maintenant activer votre accès et choisir\n                  votre mot de passe.\n                </p>\n\n                <!-- Account info -->\n                <table\n                  role=\"presentation\"\n                  width=\"100%\"\n                  cellspacing=\"0\"\n                  cellpadding=\"0\"\n                  border=\"0\"\n                  style=\"\n                    margin: 0 0 28px 0;\n                    background-color: #f7f9f6;\n                    border: 1px solid #e2e7e2;\n                    border-radius: 12px;\n                  \"\n                >\n                  <tr>\n                    <td style=\"padding: 18px 20px;\">\n                      <div\n                        style=\"\n                          margin-bottom: 6px;\n                          color: #7a857e;\n                          font-size: 12px;\n                          font-weight: 600;\n                          text-transform: uppercase;\n                          letter-spacing: 0.5px;\n                        \"\n                      >\n                        Adresse de connexion\n                      </div>\n\n                      <div\n                        style=\"\n                          color: #243e35;\n                          font-size: 15px;\n                          font-weight: 600;\n                        \"\n                      >\n                        {{ $json.body.email }}\n                      </div>\n                    </td>\n                  </tr>\n                </table>\n\n                <!-- CTA -->\n                <table\n                  role=\"presentation\"\n                  cellspacing=\"0\"\n                  cellpadding=\"0\"\n                  border=\"0\"\n                  style=\"margin-bottom: 28px;\"\n                >\n                  <tr>\n                    <td\n                      align=\"center\"\n                      bgcolor=\"#285448\"\n                      style=\"\n                        border-radius: 10px;\n                      \"\n                    >\n                      <a\n                        href=\"{{ $json.body.invitationUrl }}\"\n                        target=\"_blank\"\n                        style=\"\n                          display: inline-block;\n                          padding: 14px 24px;\n                          color: #ffffff;\n                          text-decoration: none;\n                          font-size: 14px;\n                          font-weight: 700;\n                          border-radius: 10px;\n                        \"\n                      >\n                        Activer mon compte\n                      </a>\n                    </td>\n                  </tr>\n                </table>\n\n                <!-- Security info -->\n                <table\n                  role=\"presentation\"\n                  width=\"100%\"\n                  cellspacing=\"0\"\n                  cellpadding=\"0\"\n                  border=\"0\"\n                  style=\"\n                    background-color: #faf8f1;\n                    border: 1px solid #eee8d7;\n                    border-radius: 10px;\n                  \"\n                >\n                  <tr>\n                    <td style=\"padding: 16px 18px;\">\n                      <div\n                        style=\"\n                          margin-bottom: 4px;\n                          color: #806122;\n                          font-size: 13px;\n                          font-weight: 700;\n                        \"\n                      >\n                        Lien sécurisé\n                      </div>\n\n                      <div\n                        style=\"\n                          color: #766b4f;\n                          font-size: 13px;\n                          line-height: 1.6;\n                        \"\n                      >\n                        Ce lien est valable pendant\n                        <strong>24 heures</strong>\n                        et ne peut être utilisé qu'une seule fois.\n                      </div>\n                    </td>\n                  </tr>\n                </table>\n\n                <p\n                  style=\"\n                    margin: 28px 0 8px 0;\n                    color: #879189;\n                    font-size: 12px;\n                    line-height: 1.6;\n                  \"\n                >\n                  Si le bouton ne fonctionne pas, copiez ce lien dans votre\n                  navigateur :\n                </p>\n\n                <p\n                  style=\"\n                    margin: 0;\n                    word-break: break-all;\n                    color: #496c60;\n                    font-size: 12px;\n                    line-height: 1.6;\n                  \"\n                >\n                  {{ $json.body.invitationUrl }}\n                </p>\n              </td>\n            </tr>\n\n            <!-- Footer -->\n            <tr>\n              <td\n                style=\"\n                  padding: 22px 32px;\n                  background-color: #fafbfa;\n                  border-top: 1px solid #e7ebe7;\n                \"\n              >\n                <p\n                  style=\"\n                    margin: 0 0 4px 0;\n                    color: #59675e;\n                    font-size: 13px;\n                    font-weight: 600;\n                  \"\n                >\n                  L'équipe ZenKnowledge\n                </p>\n\n                <p\n                  style=\"\n                    margin: 0;\n                    color: #929b95;\n                    font-size: 11px;\n                  \"\n                >\n                  Cet email a été envoyé automatiquement.\n                  Merci de ne pas y répondre.\n                </p>\n              </td>\n            </tr>\n\n          </table>\n\n        </td>\n      </tr>\n    </table>\n  </body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c95d3fc5-0782-4981-b0e3-660b7373f61b",
+      "name": "Send an Email",
+      "webhookId": "e957f2ad-fc38-4203-9776-b203e5b24270",
+      "credentials": {
+        "smtp": {
+          "id": "QgWkTNKEJck1ALQz",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true\n}",
+        "options": {
+          "responseCode": "={{ 200 }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "0087c600-657a-4268-bca7-9f1ff288a66e",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4dcd0c7b-5504-43be-9603-875e813d8c22",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74b6fa23bd158e136933e27a872d34c5af48cc6a3a08fb533405e38d314af82d"
+  },
+  "nodeGroups": [],
+  "id": "6z7cdJCbvOZJfLU7",
+  "tags": []
+}

@@ -1,0 +1,320 @@
+{
+  "name": "W3 - revison workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1120,
+        96
+      ],
+      "id": "e92fb613-a098-4d1f-98df-8718dfb74dde",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/revisions/prepare",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -896,
+        96
+      ],
+      "id": "39d2fbed-e4ae-4197-a100-5a5ff5fffe2d",
+      "name": "Prepare Revision Tasks",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GUoBzxKrqxM6r0cK",
+          "name": "Revision API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/revisions/pending",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -672,
+        112
+      ],
+      "id": "567380ea-aaa5-4d55-a332-6ffa69811cc7",
+      "name": "Pending Revision Reminders",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GUoBzxKrqxM6r0cK",
+          "name": "Revision API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "reminders",
+        "options": {
+          "destinationFieldName": "reminder"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "f76d9d18-873b-4c5c-82f7-3e80ea468fd2",
+      "name": "Split Revision Reminders"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.reminder.type}}",
+                    "rightValue": "REVISION_DUE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "3fac7c13-89ed-46c3-ba09-3f9f9c79c945"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Revision Due"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1d3c2cd5-b0af-4bef-86bb-bb74538bd147",
+                    "leftValue": "={{$json.reminder.type}}",
+                    "rightValue": "REMINDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reminder"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "=UNKNOWN_TYPE"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "b0897ed0-fbe2-4331-8b89-06449bf67ee2",
+      "name": "Switch Revision Type"
+    },
+    {
+      "parameters": {
+        "fromEmail": "yessineleuchi2001@gmail.com",
+        "toEmail": "={{$json.reminder.proprietaire.email}}",
+        "subject": "=Révision requise — {{$json.reminder.document.titre}}",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#243E35;line-height:1.6\">\n\n  <div style=\"padding:22px 0;border-bottom:1px solid #DDE3DC;\">\n    <h2 style=\"margin:0;color:#285448;\">\n      Révision documentaire requise\n    </h2>\n  </div>\n\n  <div style=\"padding:24px 0;\">\n\n    <p>\n      Bonjour <strong>{{$json.reminder.proprietaire.nom}}</strong>,\n    </p>\n\n    <p>\n      Le document\n      <strong>{{$json.reminder.document.titre}}</strong>\n      a atteint sa date de révision.\n    </p>\n\n    <p>\n      Une vérification de son contenu est maintenant requise.\n    </p>\n\n    <div style=\"\n      margin:24px 0;\n      padding:16px;\n      background:#F7F9F6;\n      border:1px solid #DDE3DC;\n      border-radius:10px;\n    \">\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Société :</strong>\n        {{$json.reminder.document.societe}}\n      </p>\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Service :</strong>\n        {{$json.reminder.document.service}}\n      </p>\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Version :</strong>\n        {{$json.reminder.document.numeroVersion}}\n      </p>\n\n      <p style=\"margin:0;\">\n        <strong>Échéance :</strong>\n        {{new Date($json.reminder.echeance).toLocaleDateString('fr-FR', {timeZone: 'Africa/Tunis'})}}\n      </p>\n\n    </div>\n\n    <p>\n      Merci de vérifier ce document avant l'échéance indiquée.\n    </p>\n\n  </div>\n\n  <div style=\"\n    border-top:1px solid #DDE3DC;\n    padding-top:16px;\n    font-size:12px;\n    color:#65716A;\n  \">\n    ZEN Knowledge — Notification automatique\n  </div>\n\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "304107f0-5c96-4f05-aec9-b4d82f5030a2",
+      "name": "Send Revision Due Email",
+      "webhookId": "55e1869f-fa3d-4ee6-8303-978c8743e5f0",
+      "credentials": {
+        "smtp": {
+          "id": "QgWkTNKEJck1ALQz",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/revisions/result",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    relanceId: $('Split Revision Reminders').item.json.reminder.relanceId,\n    success: true\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4f6ab8ec-b177-4a87-8fa7-fe5f7c80ad61",
+      "name": "Mark Reminder Sent",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GUoBzxKrqxM6r0cK",
+          "name": "Revision API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "yessineleuchi2001@gmail.com",
+        "toEmail": "={{$json.reminder.proprietaire.email}}",
+        "subject": "=Rappel — Révision en attente : {{$json.reminder.document.titre}}",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#243E35;line-height:1.6\">\n\n  <div style=\"padding:22px 0;border-bottom:1px solid #DDE3DC;\">\n    <h2 style=\"margin:0;color:#285448;\">\n      Rappel de révision documentaire\n    </h2>\n  </div>\n\n  <div style=\"padding:24px 0;\">\n\n    <p>\n      Bonjour <strong>{{$json.reminder.proprietaire.nom}}</strong>,\n    </p>\n\n    <p>\n      La révision du document\n      <strong>{{$json.reminder.document.titre}}</strong>\n      est toujours en attente.\n    </p>\n\n    <div style=\"\n      margin:24px 0;\n      padding:16px;\n      background:#F7F9F6;\n      border:1px solid #DDE3DC;\n      border-radius:10px;\n    \">\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Société :</strong>\n        {{$json.reminder.document.societe}}\n      </p>\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Service :</strong>\n        {{$json.reminder.document.service}}\n      </p>\n\n      <p style=\"margin:0 0 8px;\">\n        <strong>Version :</strong>\n        {{$json.reminder.document.numeroVersion}}\n      </p>\n\n      <p style=\"margin:0;\">\n        <strong>Échéance :</strong>\n        {{new Date($json.reminder.echeance).toLocaleDateString(\n          'fr-FR',\n          {timeZone: 'Africa/Tunis'}\n        )}}\n      </p>\n\n    </div>\n\n    <p>\n      Merci de terminer la révision avant l'échéance indiquée.\n    </p>\n\n  </div>\n\n  <div style=\"\n    border-top:1px solid #DDE3DC;\n    padding-top:16px;\n    font-size:12px;\n    color:#65716A;\n  \">\n    ZEN Knowledge — Notification automatique\n  </div>\n\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        192
+      ],
+      "id": "20be4ece-7b4d-4e63-92bb-68f24f9e61a4",
+      "name": "Send an Email",
+      "webhookId": "48f3c38d-155e-40c6-a62f-48542562b4b7",
+      "credentials": {
+        "smtp": {
+          "id": "QgWkTNKEJck1ALQz",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Revision Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Revision Tasks": {
+      "main": [
+        [
+          {
+            "node": "Pending Revision Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pending Revision Reminders": {
+      "main": [
+        [
+          {
+            "node": "Split Revision Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Revision Reminders": {
+      "main": [
+        [
+          {
+            "node": "Switch Revision Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Revision Type": {
+      "main": [
+        [
+          {
+            "node": "Send Revision Due Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Revision Due Email": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "45371070-efac-47b8-8e40-c3fb6b3082a7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74b6fa23bd158e136933e27a872d34c5af48cc6a3a08fb533405e38d314af82d"
+  },
+  "nodeGroups": [],
+  "id": "huiLwMuqzuYZaxke",
+  "tags": []
+}

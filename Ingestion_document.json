@@ -1,0 +1,427 @@
+{
+  "name": "W1 — Ingestion document",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "documents/ingest",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -496,
+        176
+      ],
+      "id": "e55f99e1-0ab2-431e-bf17-1ebe0fc40150",
+      "name": "Webhook",
+      "webhookId": "caae5ce2-9c28-49b5-aa64-610bf3ec67c1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "I4Ojx0xiPWH5oDjN",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "joinPages": false
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "9fac4658-4b08-4f01-adc6-13b88d3cc7af",
+      "name": "Extract from File",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d67cd847-2b7d-4a46-95a9-5b6fda82ca37",
+              "leftValue": "={{ $json.hasText }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        96,
+        144
+      ],
+      "id": "1803e6b1-00ad-4371-8a0c-4594e9835264",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/ingestion/fail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"executionId\": \"{{ $('Webhook').first().json.body.executionId }}\",\n  \"versionId\": \"{{ $('Webhook').first().json.body.versionId }}\",\n  \"code\": \"NO_EXTRACTABLE_TEXT\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        320,
+        272
+      ],
+      "id": "46cac838-405c-4dc8-b40a-aa1d43f06794",
+      "name": "Signaler PDF sans texte",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cvdN8yPiczDog1lu",
+          "name": "ZenKnowledge Internal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/ingestion/fail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"executionId\": \"{{ $('Webhook').first().json.body.executionId }}\",\n  \"versionId\": \"{{ $('Webhook').first().json.body.versionId }}\",\n  \"code\": \"PDF_EXTRACTION_FAILED\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        96,
+        272
+      ],
+      "id": "fad0d922-7dc6-4c3b-af79-6a2e15489897",
+      "name": "Signaler erreur extraction",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cvdN8yPiczDog1lu",
+          "name": "ZenKnowledge Internal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const CHUNK_SIZE = 1500;\nconst OVERLAP = 200;\nconst MAX_CHUNKS = 200;\nconst MIN_BREAK_OFFSET = Math.floor(CHUNK_SIZE / 2);\n\nconst source = $input.first().json;\nconst webhook = $(\"Webhook\").first().json.body;\n\nif (\n  typeof webhook?.executionId !== \"string\" ||\n  typeof webhook?.versionId !== \"string\"\n) {\n  throw new Error(\"Identifiants d’ingestion manquants.\");\n}\n\n// Ne jamais inventer des pages à partir du texte global.\nif (!Array.isArray(source.pages) || source.pages.length === 0) {\n  throw new Error(\n    \"Extraction page par page requise : le champ pages est absent ou vide.\",\n  );\n}\n\nfunction normalizeText(value) {\n  return value\n    .normalize(\"NFC\")\n    .replace(/\\r\\n?/g, \"\\n\")\n    .replace(/\\u00A0/g, \" \")\n    .replace(/\\u0000/g, \"\")\n    .replace(/[ \\t]+/g, \" \")\n    .replace(/ *\\n */g, \"\\n\")\n    .replace(/\\n{3,}/g, \"\\n\\n\")\n    .trim();\n}\n\nfunction findChunkEnd(text, start) {\n  const maxEnd = Math.min(start + CHUNK_SIZE, text.length);\n\n  if (maxEnd === text.length) {\n    return maxEnd;\n  }\n\n  const window = text.slice(start, maxEnd);\n\n  for (const separator of [\"\\n\\n\", \"\\n\", \" \"]) {\n    const index = window.lastIndexOf(separator);\n\n    if (index >= MIN_BREAK_OFFSET) {\n      return start + index + separator.length;\n    }\n  }\n\n  return maxEnd;\n}\n\n// Valider les pages avant de commencer le découpage.\nconst seenPages = new Set();\n\nconst pages = source.pages.map((entry) => {\n  if (\n    !Number.isInteger(entry?.page) ||\n    entry.page < 1 ||\n    typeof entry.text !== \"string\" ||\n    seenPages.has(entry.page)\n  ) {\n    throw new Error(\"Page invalide ou numéro de page dupliqué.\");\n  }\n\n  seenPages.add(entry.page);\n\n  return {\n    page: entry.page,\n    text: normalizeText(entry.text),\n  };\n});\n\npages.sort((a, b) => a.page - b.page);\n\nconst chunks = [];\n\nfor (const { page, text } of pages) {\n  // Ne pas créer de chunk pour une page sans texte.\n  // Ne pas renuméroter les pages suivantes.\n  if (!text) {\n    continue;\n  }\n\n  let start = 0;\n  let passageDansPage = 0;\n\n  while (start < text.length) {\n    const end = findChunkEnd(text, start);\n\n    let contentStart = start;\n    let contentEnd = end;\n\n    while (\n      contentStart < contentEnd &&\n      /\\s/.test(text[contentStart])\n    ) {\n      contentStart++;\n    }\n\n    while (\n      contentEnd > contentStart &&\n      /\\s/.test(text[contentEnd - 1])\n    ) {\n      contentEnd--;\n    }\n\n    if (contentEnd > contentStart) {\n      passageDansPage++;\n\n      chunks.push({\n        position: chunks.length + 1,\n        contenu: text.slice(contentStart, contentEnd),\n        pageDebut: page,\n        pageFin: page,\n        reperePassage: `Page ${page} · Passage ${passageDansPage}`,\n\n        // Offsets dans le texte NORMALISÉ de cette page.\n        // Ce ne sont pas des coordonnées visuelles du PDF.\n        debutCaractere: contentStart,\n        finCaractere: contentEnd,\n      });\n\n      if (chunks.length > MAX_CHUNKS) {\n        throw new Error(\n          `Le document dépasse la limite de ${MAX_CHUNKS} chunks.`,\n        );\n      }\n    }\n\n    if (end === text.length) {\n      break;\n    }\n\n    start = Math.max(start + 1, end - OVERLAP);\n  }\n}\n\nif (chunks.length === 0) {\n  throw new Error(\"Aucun texte exploitable dans les pages du PDF.\");\n}\n\nreturn chunks.map((chunk) => ({\n  json: {\n    executionId: webhook.executionId,\n    versionId: webhook.versionId,\n    ...chunk,\n    nombreCaracteres: chunk.contenu.length,\n    totalChunks: chunks.length,\n  },\n  pairedItem: {\n    item: 0,\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        96
+      ],
+      "id": "8d6bb63d-2c83-4167-97fa-4465b548556b",
+      "name": "Nettoyer et decouper",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({\n  model: \"models/gemini-embedding-2\",\n  content: {\n    parts: [\n      {\n        text: \"title: none | text: \" + $json.contenu\n      }\n    ]\n  },\n  outputDimensionality: 768\n}) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        544,
+        112
+      ],
+      "id": "82ce6bdc-956e-4bdf-af75-50dbb43de6b3",
+      "name": "Generer embedding",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0zcJqKdQwS2CrTEJ",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const chunk = $(\"Nettoyer et decouper\").item.json;\nconst embedding = $json.embedding?.values;\n\nif (\n  !Array.isArray(embedding) ||\n  embedding.length !== 768 ||\n  !embedding.every(\n    (value) => typeof value === \"number\" && Number.isFinite(value)\n  )\n) {\n  throw new Error(\"Embedding invalide : 768 nombres attendus.\");\n}\n\nreturn {\n  json: {\n    ...chunk,\n    embedding,\n    modeleEmbedding: \"gemini-embedding-2\",\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        112
+      ],
+      "id": "16a1d9ac-78fc-4335-8295-fd4c5c4e8604",
+      "name": "Associer embedding"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://zen-knowledge-jbeq.vercel.app/api/internal/ingestion/start",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "executionId",
+              "value": "={{ $json.body.executionId }}"
+            },
+            {
+              "name": "versionId",
+              "value": "={{ $json.body.versionId }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -288,
+        176
+      ],
+      "id": "6df30159-0105-4fb7-ac02-d4c677367d71",
+      "name": "nextCNX",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cvdN8yPiczDog1lu",
+          "name": "ZenKnowledge Internal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map((item) => item.json);\n\nif (items.length === 0 || items.length > 200) {\n  throw new Error(\"Entre 1 et 200 chunks sont attendus.\");\n}\n\nconst first = items[0];\n\nif (\n  typeof first.executionId !== \"string\" ||\n  typeof first.versionId !== \"string\" ||\n  first.modeleEmbedding !== \"gemini-embedding-2\"\n) {\n  throw new Error(\"Identifiants ou modèle d’ingestion invalides.\");\n}\n\nif (\n  !Number.isInteger(first.totalChunks) ||\n  first.totalChunks !== items.length\n) {\n  throw new Error(\"Le nombre de chunks reçus est incomplet.\");\n}\n\nfor (const item of items) {\n  if (\n    item.executionId !== first.executionId ||\n    item.versionId !== first.versionId ||\n    item.modeleEmbedding !== first.modeleEmbedding ||\n    item.totalChunks !== first.totalChunks\n  ) {\n    throw new Error(\n      \"Les chunks ne correspondent pas à la même ingestion.\",\n    );\n  }\n}\n\nitems.sort((a, b) => a.position - b.position);\n\nitems.forEach((item, index) => {\n  if (item.position !== index + 1) {\n    throw new Error(\"Positions manquantes ou dupliquées.\");\n  }\n\n  if (\n    typeof item.contenu !== \"string\" ||\n    item.contenu.trim().length === 0 ||\n    item.contenu.length > 1500\n  ) {\n    throw new Error(\n      `Contenu invalide au passage ${item.position}.`,\n    );\n  }\n\n  // Chaque chunk reste dans une seule page.\n  if (\n    !Number.isInteger(item.pageDebut) ||\n    item.pageDebut < 1 ||\n    !Number.isInteger(item.pageFin) ||\n    item.pageFin !== item.pageDebut\n  ) {\n    throw new Error(\n      `Pages invalides au passage ${item.position}.`,\n    );\n  }\n\n  if (\n    index > 0 &&\n    item.pageDebut < items[index - 1].pageDebut\n  ) {\n    throw new Error(\"L’ordre des pages est incohérent.\");\n  }\n\n  if (\n    typeof item.reperePassage !== \"string\" ||\n    item.reperePassage.trim().length === 0 ||\n    item.reperePassage.length > 200\n  ) {\n    throw new Error(\n      `Repère invalide au passage ${item.position}.`,\n    );\n  }\n\n  if (\n    !Array.isArray(item.embedding) ||\n    item.embedding.length !== 768 ||\n    !item.embedding.every(\n      (value) =>\n        typeof value === \"number\" &&\n        Number.isFinite(value) &&\n        Math.abs(value) <= 1_000_000,\n    ) ||\n    Math.hypot(...item.embedding) < 1e-12\n  ) {\n    throw new Error(\n      `Embedding invalide au passage ${item.position}.`,\n    );\n  }\n});\n\nreturn [\n  {\n    json: {\n      executionId: first.executionId,\n      versionId: first.versionId,\n      modeleEmbedding: first.modeleEmbedding,\n      totalChunks: items.length,\n      chunks: items.map((item) => ({\n        position: item.position,\n        contenu: item.contenu,\n        embedding: item.embedding,\n        pageDebut: item.pageDebut,\n        pageFin: item.pageFin,\n        reperePassage: item.reperePassage,\n      })),\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        112
+      ],
+      "id": "cd072fb0-cb2f-4f1b-bb2d-bc03dc794267",
+      "name": "Preparer enregistrement"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zen-knowledge-jbeq.vercel.app/api/internal/ingestion/complete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        112
+      ],
+      "id": "6d91c2a4-4674-4b0f-8b92-5e9a55143772",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cvdN8yPiczDog1lu",
+          "name": "ZenKnowledge Internal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const source = $json;\n\nif (\n  !Array.isArray(source.text) ||\n  !source.text.every((text) => typeof text === \"string\")\n) {\n  throw new Error(\n    \"Extraction invalide : désactive Join Pages dans Extract from File.\",\n  );\n}\n\nif (\n  !Number.isInteger(source.numpages) ||\n  source.numpages < 1 ||\n  source.text.length !== source.numpages\n) {\n  throw new Error(\n    \"Extraction incomplète : le nombre de textes ne correspond pas aux pages du PDF.\",\n  );\n}\n\n// Conserver les pages vides pour préserver les vrais numéros.\nconst pages = source.text.map((text, index) => ({\n  page: index + 1,\n  text,\n}));\n\nreturn {\n  json: {\n    pages,\n    nombrePages: source.numpages,\n    hasText: pages.some(\n      ({ text }) => text\n        .replace(/[\\s\\u0000\\u200B\\uFEFF]/g, \"\")\n        .length > 0,\n    ),\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "379ee36a-e659-40f4-be93-2042548c337e",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "nextCNX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Signaler erreur extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Nettoyer et decouper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Signaler PDF sans texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signaler erreur extraction": {
+      "main": [
+        []
+      ]
+    },
+    "Nettoyer et decouper": {
+      "main": [
+        [
+          {
+            "node": "Generer embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generer embedding": {
+      "main": [
+        [
+          {
+            "node": "Associer embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "nextCNX": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Associer embedding": {
+      "main": [
+        [
+          {
+            "node": "Preparer enregistrement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer enregistrement": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a1d680b2-8d55-4d68-b1a1-d376baf50943",
+  "meta": {
+    "instanceId": "74b6fa23bd158e136933e27a872d34c5af48cc6a3a08fb533405e38d314af82d"
+  },
+  "nodeGroups": [],
+  "id": "9HKxWs1yuqeH7P9U",
+  "tags": []
+}

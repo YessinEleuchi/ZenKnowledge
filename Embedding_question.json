@@ -1,0 +1,159 @@
+{
+  "name": "W2 — Embedding question",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const question = $json.body?.question;\n\nif (\n  typeof question !== \"string\" ||\n  question.trim().length < 3 ||\n  question.trim().length > 2000\n) {\n  throw new Error(\"La question doit contenir entre 3 et 2000 caractères.\");\n}\n\nreturn {\n  json: {\n    question: question.trim(),\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a94bf555-b0b4-42b7-9d96-7de4279e44b3",
+      "name": "Valider question"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chat/embed-question",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7d6702a6-d308-4325-9723-4a88a6f6d0b4",
+      "name": "Recevoir la question",
+      "webhookId": "fbacac23-868d-4430-a7d3-e97b387574ea",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "I4Ojx0xiPWH5oDjN",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({\n  model: \"models/gemini-embedding-2\",\n  content: {\n    parts: [\n      {\n        text: \"task: question answering | query: \" + $json.question\n      }\n    ]\n  },\n  outputDimensionality: 768\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "418b5a98-59ef-4f32-a15b-a2fd0a3148f0",
+      "name": "Embedding question",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0zcJqKdQwS2CrTEJ",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const embedding = $json.embedding?.values;\n\nif (\n  !Array.isArray(embedding) ||\n  embedding.length !== 768 ||\n  !embedding.every(\n    (value) => typeof value === \"number\" && Number.isFinite(value)\n  ) ||\n  !embedding.some((value) => Math.abs(value) > 1e-12)\n) {\n  throw new Error(\"Embedding de question invalide.\");\n}\n\nreturn {\n  json: {\n    modeleEmbedding: \"gemini-embedding-2\",\n    embedding,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "04c73e4b-87ac-4532-9eda-fca64ef3ebb2",
+      "name": "Preparer reponse"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        896,
+        0
+      ],
+      "id": "f4cce016-34a4-4c12-9eff-711f8e36114e",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recevoir la question": {
+      "main": [
+        [
+          {
+            "node": "Valider question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valider question": {
+      "main": [
+        [
+          {
+            "node": "Embedding question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding question": {
+      "main": [
+        [
+          {
+            "node": "Preparer reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer reponse": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "de3dba2c-adb8-4c67-ac97-e39212ed5c8f",
+  "meta": {
+    "instanceId": "74b6fa23bd158e136933e27a872d34c5af48cc6a3a08fb533405e38d314af82d"
+  },
+  "nodeGroups": [],
+  "id": "Xsebprj0Qw3VHV0q",
+  "tags": []
+}
