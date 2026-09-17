@@ -662,6 +662,18 @@ En production :
 - ne jamais versionner `.env`.
 
 ---
+## Comptes de démonstration
+
+Des comptes de test sont disponibles pour explorer les différents niveaux d'accès de l'application.
+
+| Rôle | Email | Mot de passe |
+|---|---|---|
+| Administrateur | `admin@zenknowledge.tn` | `zenknowledge` |
+| Gestionnaire | `azertyyyy1235478@gmail.com` | `123456789123` |
+| Collaborateur | `yessine.deeplearning@gmail.com` | `123456789123` |
+
+> Ces comptes sont exclusivement destinés à la démonstration et ne contiennent aucune donnée sensible.
+------
 
 ## Auteur
 
